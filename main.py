@@ -5,14 +5,8 @@
 ############################################################
 # 1. ライブラリの読み込み
 ############################################################
-# --- [修正] python-dotenvがない場合でもアプリを止めない安全弁 ---
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    # Streamlit Cloud等でインストールに失敗していても、エラーにせずスルーする
-    pass
-
+# 「.env」ファイルから環境変数を読み込むための関数
+from dotenv import load_dotenv
 # ログ出力を行うためのモジュール
 import logging
 # streamlitアプリの表示を担当するモジュール

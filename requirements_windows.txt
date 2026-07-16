@@ -25,7 +25,6 @@ Deprecated==1.2.18
 distro==1.9.0
 docx2txt==0.8
 durationpy==0.9
-dotenv
 fastapi==0.115.7
 filelock==3.17.0
 flatbuffers==25.1.24

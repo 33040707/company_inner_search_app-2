@@ -8,9 +8,9 @@ from logging.handlers import TimedRotatingFileHandler
 from uuid import uuid4
 import sys
 import unicodedata
-import base64          # 👇追加: 画像変換用
-import fitz            # 👇追加: PDF読み取り用(PyMuPDF)
-import openai          # 👇追加: Vision OCR用
+import base64
+import fitz
+import openai
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
@@ -131,53 +131,48 @@ def recursive_file_check(path, docs_all, integrated_docs_all):
 
 def file_load(path, docs_all, integrated_docs_all):
     """ファイル内のデータ読み込み"""
-    file_extension = os.path.splitext(path)[1]
+    file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:
         try:
             # ==========================================
-            # PDFの場合は画像OCR（Vision）を利用する特別処理
+            # PDFの場合は画像OCR（Vision）を【強制】利用する特別処理
             # ==========================================
             if file_extension == ".pdf":
                 doc = fitz.open(path)
                 text = ""
                 for page_num, page in enumerate(doc):
-                    extracted_text = page.get_text()
+                    logging.getLogger(ct.LOGGER_NAME).info(f"AI高精度読み取り実行中: {file_name} (ページ {page_num+1}/{len(doc)})")
                     
-                    # 50文字未満なら「画像化されたPDF」と判定し、GPT-4oでOCR読み取りを行う
-                    if len(extracted_text.strip()) < 50:
-                        logging.getLogger(ct.LOGGER_NAME).info(f"OCR実行中: {file_name} (ページ {page_num+1})")
-                        
-                        pix = page.get_pixmap(dpi=200)
-                        img_bytes = pix.tobytes("jpeg")
-                        base64_image = base64.b64encode(img_bytes).decode('utf-8')
-                        
-                        client = openai.Client() # Streamlit SecretsのAPIキーを自動利用
-                        response = client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[
-                                {
-                                    "role": "user",
-                                    "content": [
-                                        {"type": "text", "text": "この画像は社内資料です。書かれている文字、数値、表の内容をすべて正確にテキストとして書き起こしてください。"},
-                                        {
-                                            "type": "image_url",
-                                            "image_url": {
-                                                "url": f"data:image/jpeg;base64,{base64_image}",
-                                                "detail": "high"
-                                            },
+                    # 画質を大幅に上げて(dpi=400)画像を生成（粗いPDF・小さい文字対策）
+                    pix = page.get_pixmap(dpi=400)
+                    img_bytes = pix.tobytes("jpeg")
+                    base64_image = base64.b64encode(img_bytes).decode('utf-8')
+                    
+                    client = openai.Client()
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "この画像は建設・設計などの業務に関する価格表や仕様書などの社内資料です。画質が粗い場合でも、書かれている文字、数値、表の構造を推測し、すべて正確にマークダウン形式のテキスト（表はMarkdownテーブル）として書き起こしてください。"},
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}",
+                                            "detail": "high"
                                         },
-                                    ],
-                                }
-                            ],
-                            max_tokens=2000,
-                        )
-                        text += response.choices[0].message.content + "\n"
-                    else:
-                        text += extracted_text + "\n"
+                                    },
+                                ],
+                            }
+                        ],
+                        max_tokens=3000,
+                        temperature=0.0, # 事実のみを正確に読み取らせる
+                    )
+                    text += response.choices[0].message.content + "\n\n"
                 
-                # 読み取った全テキストをLangChainのDocumentとして保存
                 new_doc = Document(page_content=text, metadata={"source": path})
                 docs_all.append(new_doc)
 

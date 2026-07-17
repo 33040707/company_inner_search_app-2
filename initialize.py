@@ -8,9 +8,6 @@ from logging.handlers import TimedRotatingFileHandler
 from uuid import uuid4
 import sys
 import unicodedata
-import base64
-import fitz
-import openai
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
@@ -18,7 +15,6 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
-
 
 def initialize():
     """画面読み込み時に実行する初期化処理"""
@@ -29,7 +25,6 @@ def initialize():
     initialize_session_id()
     initialize_logger()
     initialize_retriever()
-
 
 def initialize_logger():
     """ログ出力の設定"""
@@ -49,12 +44,10 @@ def initialize_logger():
     logger.setLevel(logging.INFO)
     logger.addHandler(log_handler)
 
-
 def initialize_session_id():
     """セッションIDの作成"""
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid4().hex
-
 
 def initialize_retriever():
     """画面読み込み時にRAGのRetrieverを作成"""
@@ -89,13 +82,11 @@ def initialize_retriever():
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
-
 def initialize_session_state():
     """初期化データの用意"""
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.chat_history = []
-
 
 def load_data_sources():
     """RAGの参照先となるデータソースの読み込み"""
@@ -117,7 +108,6 @@ def load_data_sources():
     docs_all.extend(web_docs_all)
     return docs_all, integrated_docs_all
 
-
 def recursive_file_check(path, docs_all, integrated_docs_all):
     """ファイル再帰チェック"""
     if os.path.isdir(path):
@@ -128,7 +118,6 @@ def recursive_file_check(path, docs_all, integrated_docs_all):
     else:
         file_load(path, docs_all, integrated_docs_all)
 
-
 def file_load(path, docs_all, integrated_docs_all):
     """ファイル内のデータ読み込み"""
     file_extension = os.path.splitext(path)[1].lower()
@@ -136,68 +125,22 @@ def file_load(path, docs_all, integrated_docs_all):
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:
         try:
-            # ==========================================
-            # PDFの場合は画像OCR（Vision）を【強制】利用する特別処理
-            # ==========================================
-            if file_extension == ".pdf":
-                doc = fitz.open(path)
-                text = ""
-                for page_num, page in enumerate(doc):
-                    logging.getLogger(ct.LOGGER_NAME).info(f"AI高精度読み取り実行中: {file_name} (ページ {page_num+1}/{len(doc)})")
-                    
-                    # 画質を大幅に上げて(dpi=400)画像を生成（粗いPDF・小さい文字対策）
-                    pix = page.get_pixmap(dpi=400)
-                    img_bytes = pix.tobytes("jpeg")
-                    base64_image = base64.b64encode(img_bytes).decode('utf-8')
-                    
-                    client = openai.Client()
-                    response = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": "この画像は建設・設計などの業務に関する価格表や仕様書などの社内資料です。画質が粗い場合でも、書かれている文字、数値、表の構造を推測し、すべて正確にマークダウン形式のテキスト（表はMarkdownテーブル）として書き起こしてください。"},
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {
-                                            "url": f"data:image/jpeg;base64,{base64_image}",
-                                            "detail": "high"
-                                        },
-                                    },
-                                ],
-                            }
-                        ],
-                        max_tokens=3000,
-                        temperature=0.0, # 事実のみを正確に読み取らせる
-                    )
-                    text += response.choices[0].message.content + "\n\n"
-                
-                new_doc = Document(page_content=text, metadata={"source": path})
-                docs_all.append(new_doc)
-
-            # ==========================================
-            # PDF以外のファイル（Word, CSV, Text等）の処理
-            # ==========================================
+            loader = ct.SUPPORTED_EXTENSIONS[file_extension](path)
+            docs = loader.load()
+            if not file_name in ct.CSV_INTEGRATION_TARGETS:
+                docs_all.extend(docs)
             else:
-                loader = ct.SUPPORTED_EXTENSIONS[file_extension](path)
-                docs = loader.load()
-                if not file_name in ct.CSV_INTEGRATION_TARGETS:
-                    docs_all.extend(docs)
-                else:
-                    doc_content = ""
-                    for row in docs:
-                        page_content = row.page_content
-                        value_list = page_content.split("\n")
-                        row_data = "\n".join(value_list)
-                        doc_content += row_data + "\n=================================\n"
-                    
-                    new_doc = Document(page_content=doc_content, metadata={"source": path})
-                    integrated_docs_all.append(new_doc)
-                    
+                doc_content = ""
+                for row in docs:
+                    page_content = row.page_content
+                    value_list = page_content.split("\n")
+                    row_data = "\n".join(value_list)
+                    doc_content += row_data + "\n=================================\n"
+                
+                new_doc = Document(page_content=doc_content, metadata={"source": path})
+                integrated_docs_all.append(new_doc)
         except Exception as e:
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
-
 
 def adjust_string(s):
     """Windows環境でRAGが正常動作するよう調整"""

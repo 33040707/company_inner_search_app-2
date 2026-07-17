@@ -7,9 +7,14 @@ import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+
+# 👇 最新バージョンに合わせ、機能の格納場所をピンポイントで直接指定しています
+from langchain.chains.history_aware_retriever import create_history_aware_retriever
+from langchain.chains.retrieval import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
+
 import constants as ct
+
 
 def get_source_icon(source):
     """メッセージと一緒に表示するアイコンの種類を取得"""
@@ -20,9 +25,11 @@ def get_source_icon(source):
     
     return icon
 
+
 def build_error_message(message):
     """エラーメッセージと管理者問い合わせテンプレートの連結"""
     return "\n".join([message, ct.COMMON_ERROR_MESSAGE])
+
 
 def get_llm_response(chat_message):
     """LLMからの回答取得"""

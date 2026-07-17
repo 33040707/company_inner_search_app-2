@@ -152,6 +152,9 @@ def display_search_llm_response(llm_response):
     # LLMからのレスポンスに参照元情報が入っており、かつ「該当資料なし」が回答として返された場合
     if llm_response["context"] and llm_response["answer"] != ct.NO_DOC_MATCH_ANSWER:
 
+        # 👇 【追加】ファイルのありかを表示する前に、AIの回答（要約など）を画面に表示する
+        st.markdown(llm_response["answer"])
+
         # ==========================================
         # ユーザー入力値と最も関連性が高いメインドキュメントのありかを表示
         # ==========================================

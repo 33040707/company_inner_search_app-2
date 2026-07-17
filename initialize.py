@@ -9,7 +9,8 @@ from uuid import uuid4
 import sys
 import unicodedata
 import streamlit as st
-from docx import Document
+# 👇 修正箇所: 誤った「from docx import Document」を削除し、正しいLangChainのDocumentに変更しました
+from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
@@ -79,7 +80,6 @@ def initialize_retriever():
 
     # 読み込めるデータが1件もない場合のダミーデータ作成（エラー回避用）
     if not splitted_docs:
-        from langchain.schema import Document
         splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
 
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
@@ -139,9 +139,9 @@ def file_load(path, docs_all, integrated_docs_all):
                     value_list = page_content.split("\n")
                     row_data = "\n".join(value_list)
                     doc += row_data + "\n=================================\n"
-                new_doc = Document()
-                new_doc.page_content = doc
-                new_doc.metadata = {"source": path}
+                
+                # 👇 ここでLangChainのDocumentとして正しく初期化されるようになります
+                new_doc = Document(page_content=doc, metadata={"source": path})
                 integrated_docs_all.append(new_doc)
         except Exception as e:
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")

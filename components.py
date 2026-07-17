@@ -87,6 +87,10 @@ def display_conversation_log():
                     
                     # ファイルのありかの情報が取得できた場合（通常時）の表示処理
                     if not "no_file_path_flg" in message["content"]:
+                        # 👇 【修正箇所】過去のチャット履歴を描画する際にもAIの回答文を表示する
+                        if "answer" in message["content"] and message["content"]["answer"]:
+                            st.markdown(message["content"]["answer"])
+
                         # ==========================================
                         # ユーザー入力値と最も関連性が高いメインドキュメントのありかを表示
                         # ==========================================
@@ -152,8 +156,9 @@ def display_search_llm_response(llm_response):
     # LLMからのレスポンスに参照元情報が入っており、かつ「該当資料なし」が回答として返された場合
     if llm_response["context"] and llm_response["answer"] != ct.NO_DOC_MATCH_ANSWER:
 
-        # 👇 【追加】ファイルのありかを表示する前に、AIの回答（要約など）を画面に表示する
-        st.markdown(llm_response["answer"])
+        # 👇 AIの回答（要約など）を画面に表示する
+        if llm_response["answer"]:
+            st.markdown(llm_response["answer"])
 
         # ==========================================
         # ユーザー入力値と最も関連性が高いメインドキュメントのありかを表示
@@ -235,6 +240,7 @@ def display_search_llm_response(llm_response):
         
         # 表示用の会話ログに格納するためのデータを用意
         # - 「mode」: モード（「社内文書検索」or「社内問い合わせ」）
+        # - 「answer」: LLMからの回答
         # - 「main_message」: メインドキュメントの補足メッセージ
         # - 「main_file_path」: メインドキュメントのファイルパス
         # - 「main_page_number」: メインドキュメントのページ番号
@@ -242,6 +248,7 @@ def display_search_llm_response(llm_response):
         # - 「sub_choices」: サブドキュメントの情報リスト
         content = {}
         content["mode"] = ct.ANSWER_MODE_1
+        content["answer"] = llm_response["answer"]  # 👇 【修正箇所】チャット履歴として保存するための処理を追加
         content["main_message"] = main_message
         content["main_file_path"] = main_file_path
         # メインドキュメントのページ番号は、取得できた場合にのみ追加

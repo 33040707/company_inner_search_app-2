@@ -9,13 +9,16 @@ from uuid import uuid4
 import sys
 import unicodedata
 import streamlit as st
-# 👇 修正箇所: 誤った「from docx import Document」を削除し、正しいLangChainのDocumentに変更しました
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
-from langchain.text_splitter import CharacterTextSplitter
+
+# 👇 修正箇所: 最新バージョンに合わせて「langchain_text_splitters」からインポートするように変更しました
+from langchain_text_splitters import CharacterTextSplitter
+
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
+
 
 def initialize():
     """画面読み込み時に実行する初期化処理"""
@@ -27,6 +30,7 @@ def initialize():
     initialize_session_id()
     initialize_logger()
     initialize_retriever()
+
 
 def initialize_logger():
     """ログ出力の設定"""
@@ -46,10 +50,12 @@ def initialize_logger():
     logger.setLevel(logging.INFO)
     logger.addHandler(log_handler)
 
+
 def initialize_session_id():
     """セッションIDの作成"""
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid4().hex
+
 
 def initialize_retriever():
     """画面読み込み時にRAGのRetrieverを作成"""
@@ -85,11 +91,13 @@ def initialize_retriever():
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
+
 def initialize_session_state():
     """初期化データの用意"""
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.chat_history = []
+
 
 def load_data_sources():
     """RAGの参照先となるデータソースの読み込み"""
@@ -111,6 +119,7 @@ def load_data_sources():
     docs_all.extend(web_docs_all)
     return docs_all, integrated_docs_all
 
+
 def recursive_file_check(path, docs_all, integrated_docs_all):
     """ファイル再帰チェック"""
     if os.path.isdir(path):
@@ -120,6 +129,7 @@ def recursive_file_check(path, docs_all, integrated_docs_all):
             recursive_file_check(full_path, docs_all, integrated_docs_all)
     else:
         file_load(path, docs_all, integrated_docs_all)
+
 
 def file_load(path, docs_all, integrated_docs_all):
     """ファイル内のデータ読み込み"""
@@ -140,11 +150,11 @@ def file_load(path, docs_all, integrated_docs_all):
                     row_data = "\n".join(value_list)
                     doc += row_data + "\n=================================\n"
                 
-                # 👇 ここでLangChainのDocumentとして正しく初期化されるようになります
                 new_doc = Document(page_content=doc, metadata={"source": path})
                 integrated_docs_all.append(new_doc)
         except Exception as e:
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
+
 
 def adjust_string(s):
     """Windows環境でRAGが正常動作するよう調整"""

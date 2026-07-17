@@ -22,7 +22,6 @@ SPINNER_TEXT = "回答生成中..."
 # ==========================================
 # ログ出力系
 # ==========================================
-# 変更点: os.getcwd() を使った絶対パスに変更
 LOG_DIR_PATH = os.path.join(os.getcwd(), "logs")
 LOGGER_NAME = "ApplicationLog"
 LOG_FILE = "application.log"
@@ -40,7 +39,6 @@ TOP_K = 5
 # ==========================================
 # RAG参照用のデータソース系
 # ==========================================
-# 変更点: os.getcwd() を使った絶対パスに変更
 RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
 SUPPORTED_EXTENSIONS = {
     ".pdf": PyMuPDFLoader,

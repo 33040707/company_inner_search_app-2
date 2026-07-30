@@ -16,6 +16,10 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
 
+# SecretsからAPIキーを設定
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+
 def initialize():
     """画面読み込み時に実行する初期化処理"""
     os.makedirs(ct.RAG_TOP_FOLDER_PATH, exist_ok=True)

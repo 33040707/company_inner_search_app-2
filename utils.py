@@ -9,6 +9,10 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
 import constants as ct
 
+# Streamlit CloudなどのSecretsからAPIキーを取得して環境変数に適用
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+
 def get_source_icon(source):
     """メッセージと一緒に表示するアイコンの種類を取得"""
     if source.startswith("http"):

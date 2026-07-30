@@ -4,11 +4,10 @@
 
 import os
 import streamlit as st
-import constants as ct
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
-
+import constants as ct
 
 def get_source_icon(source):
     """メッセージと一緒に表示するアイコンの種類を取得"""
@@ -53,28 +52,22 @@ def get_llm_response(chat_message):
     # ==========================================
     docs = st.session_state.retriever.invoke(search_query)
     
-    # 検索したドキュメント群のテキストを結合（PDF等の本文）
+    # 検索したドキュメント群のテキストを結合
     context_text = "\n\n".join([doc.page_content for doc in docs])
 
     # ==========================================
     # 3. モードに応じた回答の生成
     # ==========================================
     if st.session_state.mode == ct.ANSWER_MODE_1:
-        # 【社内文書検索】最初の構成そのまま
         question_answer_template = ct.SYSTEM_PROMPT_DOC_SEARCH
-        question_answer_prompt = ChatPromptTemplate.from_messages([
-            ("system", question_answer_template),
-            MessagesPlaceholder("chat_history"),
-            ("human", "{input}")
-        ])
     else:
-        # 【社内問い合わせ】PDFから読み取った context を確実に参照させるため human 側に渡す
         question_answer_template = ct.SYSTEM_PROMPT_INQUIRY
-        question_answer_prompt = ChatPromptTemplate.from_messages([
-            ("system", question_answer_template),
-            MessagesPlaceholder("chat_history"),
-            ("human", "【質問】\n{input}\n\n【参照ドキュメント本文】\n{context}")
-        ])
+
+    question_answer_prompt = ChatPromptTemplate.from_messages([
+        ("system", question_answer_template),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}")
+    ])
 
     # LLMから最終的な回答を取得
     answer_msg = (question_answer_prompt | llm).invoke({

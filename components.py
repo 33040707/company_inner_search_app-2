@@ -33,8 +33,9 @@ def display_sidebar():
         # 回答モードを選択する用のラジオボタンを表示
         col1, col2 = st.columns([100, 1])
         with col1:
+            # 「label_visibility="collapsed"」とすることで、ラジオボタンを非表示にする
             st.session_state.mode = st.radio(
-                label="利用目的の選択",
+                label="",
                 options=[ct.ANSWER_MODE_1, ct.ANSWER_MODE_2],
                 label_visibility="collapsed"
             )
@@ -86,10 +87,6 @@ def display_conversation_log():
                     
                     # ファイルのありかの情報が取得できた場合（通常時）の表示処理
                     if not "no_file_path_flg" in message["content"]:
-                        # 👇 【修正箇所】過去のチャット履歴を描画する際にもAIの回答文を表示する
-                        if "answer" in message["content"] and message["content"]["answer"]:
-                            st.markdown(message["content"]["answer"])
-
                         # ==========================================
                         # ユーザー入力値と最も関連性が高いメインドキュメントのありかを表示
                         # ==========================================
@@ -154,10 +151,6 @@ def display_search_llm_response(llm_response):
     """
     # LLMからのレスポンスに参照元情報が入っており、かつ「該当資料なし」が回答として返された場合
     if llm_response["context"] and llm_response["answer"] != ct.NO_DOC_MATCH_ANSWER:
-
-        # 👇 AIの回答（要約など）を画面に表示する
-        if llm_response["answer"]:
-            st.markdown(llm_response["answer"])
 
         # ==========================================
         # ユーザー入力値と最も関連性が高いメインドキュメントのありかを表示
@@ -238,21 +231,33 @@ def display_search_llm_response(llm_response):
                     st.info(f"{sub_choice['source']}", icon=icon)
         
         # 表示用の会話ログに格納するためのデータを用意
+        # - 「mode」: モード（「社内文書検索」or「社内問い合わせ」）
+        # - 「main_message」: メインドキュメントの補足メッセージ
+        # - 「main_file_path」: メインドキュメントのファイルパス
+        # - 「main_page_number」: メインドキュメントのページ番号
+        # - 「sub_message」: サブドキュメントの補足メッセージ
+        # - 「sub_choices」: サブドキュメントの情報リスト
         content = {}
         content["mode"] = ct.ANSWER_MODE_1
-        content["answer"] = llm_response["answer"]
         content["main_message"] = main_message
         content["main_file_path"] = main_file_path
+        # メインドキュメントのページ番号は、取得できた場合にのみ追加
         if "page" in llm_response["context"][0].metadata:
             content["main_page_number"] = main_page_number
+        # サブドキュメントの情報は、取得できた場合にのみ追加
         if sub_choices:
             content["sub_message"] = sub_message
             content["sub_choices"] = sub_choices
     
     # LLMからのレスポンスに、ユーザー入力値と関連性の高いドキュメント情報が入って「いない」場合
     else:
+        # 関連ドキュメントが取得できなかった場合のメッセージ表示
         st.markdown(ct.NO_DOC_MATCH_MESSAGE)
 
+        # 表示用の会話ログに格納するためのデータを用意
+        # - 「mode」: モード（「社内文書検索」or「社内問い合わせ」）
+        # - 「answer」: LLMからの回答
+        # - 「no_file_path_flg」: ファイルパスが取得できなかったことを示すフラグ（画面を再描画時の分岐に使用）
         content = {}
         content["mode"] = ct.ANSWER_MODE_1
         content["answer"] = ct.NO_DOC_MATCH_MESSAGE
@@ -276,34 +281,54 @@ def display_contact_llm_response(llm_response):
 
     # ユーザーの質問・要望に適切な回答を行うための情報が、社内文書のデータベースに存在しなかった場合
     if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER:
+        # 区切り線を表示
         st.divider()
 
+        # 補足メッセージを表示
         message = "情報源"
         st.markdown(f"##### {message}")
 
+        # 参照元のファイルパスの一覧を格納するためのリストを用意
         file_path_list = []
         file_info_list = []
 
+        # LLMが回答生成の参照元として使ったドキュメントの一覧が「context」内のリストの中に入っているため、ループ処理
         for document in llm_response["context"]:
+            # ファイルパスを取得
             file_path = document.metadata["source"]
+            # ファイルパスの重複は除去
             if file_path in file_path_list:
                 continue
 
+            # ページ番号が取得できた場合のみ、ページ番号を表示（ドキュメントによっては取得できない場合がある）
             if "page" in document.metadata:
+                # ページ番号を取得
                 page_number = document.metadata["page"]
+                # 「ファイルパス」と「ページ番号」
                 file_info = f"{file_path}（ページNo.{page_number+1}）"
             else:
+                # 「ファイルパス」のみ
                 file_info = f"{file_path}"
 
+            # 参照元のありかに応じて、適したアイコンを取得
             icon = utils.get_source_icon(file_path)
+            # ファイル情報を表示
             st.info(file_info, icon=icon)
 
+            # 重複チェック用に、ファイルパスをリストに順次追加
             file_path_list.append(file_path)
+            # ファイル情報をリストに順次追加
             file_info_list.append(file_info)
 
+    # 表示用の会話ログに格納するためのデータを用意
+    # - 「mode」: モード（「社内文書検索」or「社内問い合わせ」）
+    # - 「answer」: LLMからの回答
+    # - 「message」: 補足メッセージ
+    # - 「file_path_list」: ファイルパスの一覧リスト
     content = {}
     content["mode"] = ct.ANSWER_MODE_2
     content["answer"] = llm_response["answer"]
+    # 参照元のドキュメントが取得できた場合のみ
     if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER:
         content["message"] = message
         content["file_info_list"] = file_info_list

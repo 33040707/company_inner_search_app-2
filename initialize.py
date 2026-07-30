@@ -57,7 +57,6 @@ def initialize_retriever():
     
     docs_all, integrated_docs_all = load_data_sources()
 
-    # 文字列の正規化処理
     for doc in docs_all:
         doc.page_content = adjust_string(doc.page_content)
         for key in list(doc.metadata.keys()):
@@ -72,8 +71,7 @@ def initialize_retriever():
     
     embeddings = OpenAIEmbeddings()
     
-    # 【重要修正】CharacterTextSplitter から RecursiveCharacterTextSplitter に変更
-    # これにより、PDFやtxtの改行位置に依存せず安全にチャンク分割されます
+    # 文章を途切れにくくしテキスト・PDFを確実にチャンク化するスプリッター
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=ct.CHUNK_SIZE,
         chunk_overlap=ct.CHUNK_OVERLAP,
@@ -130,7 +128,7 @@ def file_load(path, docs_all, integrated_docs_all):
     file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
 
-    # 同名の .txt ファイルが作成済みの場合はPDF読み込みをスキップして二重化を防止
+    # txt化済みファイルが存在する場合はPDF直接読み込みをスキップ
     base_name = os.path.splitext(path)[0]
     txt_counterpart = f"{base_name}.txt"
     if file_extension == ".pdf" and os.path.exists(txt_counterpart):

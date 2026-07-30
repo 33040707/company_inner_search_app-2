@@ -30,7 +30,7 @@ APP_BOOT_MESSAGE = "アプリが起動されました。"
 # ==========================================
 # LLM設定系
 # ==========================================
-MODEL = "gpt-4o-mini"
+MODEL = "gpt-5-mini"
 TEMPERATURE = 0.0
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100

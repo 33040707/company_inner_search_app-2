@@ -6,6 +6,7 @@
 # ライブラリの読み込み
 ############################################################
 import os
+import glob
 import streamlit as st
 import utils
 import constants as ct
@@ -20,9 +21,22 @@ def _format_source_path(file_path: str) -> str:
     .txt 形式で参照されている場合も、元のPDF/データ元を分かりやすく整形する
     """
     if file_path.endswith(".txt"):
+        # まずは同ディレクトリにある PDF を想定して検索
         pdf_candidate = file_path[:-4] + ".pdf"
         if os.path.exists(pdf_candidate):
             return f"{pdf_candidate}（テキスト変換元: {file_path}）"
+
+        # 見つからない場合は、RAG_TOP_FOLDER_PATH 以下を走査して同名の PDF を探す（大文字小文字を無視）
+        try:
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            pattern = os.path.join(ct.RAG_TOP_FOLDER_PATH, "**", "*")
+            for p in glob.iglob(pattern, recursive=True):
+                if os.path.isfile(p):
+                    name_no_ext, ext = os.path.splitext(os.path.basename(p))
+                    if name_no_ext == base_name and ext.lower() == ".pdf":
+                        return f"{p}（テキスト変換元: {file_path}）"
+        except Exception:
+            pass
     return file_path
 
 

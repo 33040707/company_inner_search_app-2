@@ -5,9 +5,25 @@
 ############################################################
 # ライブラリの読み込み
 ############################################################
+import os
 import streamlit as st
 import utils
 import constants as ct
+
+
+############################################################
+# ヘルパー関数（表示用ユーティリティ）
+############################################################
+
+def _format_source_path(file_path: str) -> str:
+    """
+    .txt 形式で参照されている場合も、元のPDF/データ元を分かりやすく整形する
+    """
+    if file_path.endswith(".txt"):
+        pdf_candidate = file_path[:-4] + ".pdf"
+        if os.path.exists(pdf_candidate):
+            return f"{pdf_candidate}（テキスト変換元: {file_path}）"
+    return file_path
 
 
 ############################################################
@@ -71,21 +87,23 @@ def display_conversation_log():
 
                         st.markdown(message["content"]["main_message"])
 
+                        display_path = _format_source_path(message['content']['main_file_path'])
                         icon = utils.get_source_icon(message['content']['main_file_path'])
-                        st.success(f"📌 **保存場所:** `{message['content']['main_file_path']}`", icon=icon)
+                        st.success(f"📌 **ファイルの保存先:** `{display_path}`", icon=icon)
                         
                         if "main_content" in message["content"]:
-                            with st.expander("📄 抽出されたデータ内容を確認"):
+                            with st.expander("📄 PDF/文書から抽出されたデータ内容を表示"):
                                 st.markdown(message["content"]["main_content"])
 
                         if "sub_message" in message["content"]:
                             st.markdown(message["content"]["sub_message"])
 
                             for sub_choice in message["content"]["sub_choices"]:
+                                sub_display_path = _format_source_path(sub_choice['source'])
                                 icon = utils.get_source_icon(sub_choice['source'])
-                                st.info(f"📌 **保存場所:** `{sub_choice['source']}`", icon=icon)
+                                st.info(f"📌 **ファイルの保存先:** `{sub_display_path}`", icon=icon)
                                 if "content" in sub_choice:
-                                    with st.expander(f"📄 {sub_choice['source']} の内容を確認"):
+                                    with st.expander(f"📄 データ内容を表示 ({os.path.basename(sub_choice['source'])})"):
                                         st.markdown(sub_choice["content"])
                     else:
                         st.markdown(message["content"]["answer"])
@@ -96,10 +114,11 @@ def display_conversation_log():
                         st.divider()
                         st.markdown(f"##### {message['content']['message']}")
                         for file_item in message["content"]["file_info_list"]:
+                            display_path = _format_source_path(file_item["path"])
                             icon = utils.get_source_icon(file_item["path"])
-                            st.info(f"📌 **保存場所:** `{file_item['path']}`", icon=icon)
+                            st.info(f"📌 **ファイルの保存先:** `{display_path}`", icon=icon)
                             if file_item.get("content"):
-                                with st.expander("📄 参照したデータ内容を表示"):
+                                with st.expander(f"📄 参照されたデータ内容を表示 ({os.path.basename(file_item['path'])})"):
                                     st.markdown(file_item["content"])
 
 
@@ -118,9 +137,10 @@ def display_search_llm_response(llm_response):
         main_message = "入力内容に関する情報は、以下のファイルに含まれている可能性があります。"
         st.markdown(main_message)
         
+        display_path = _format_source_path(main_file_path)
         icon = utils.get_source_icon(main_file_path)
-        st.success(f"📌 **保存場所:** `{main_file_path}`", icon=icon)
-        with st.expander("📄 抽出されたデータ内容を確認"):
+        st.success(f"📌 **ファイルの保存先:** `{display_path}`", icon=icon)
+        with st.expander("📄 PDF/文書から抽出されたデータ内容を表示"):
             st.markdown(main_file_content)
 
         sub_choices = []
@@ -143,9 +163,10 @@ def display_search_llm_response(llm_response):
             st.markdown(sub_message)
 
             for sub_choice in sub_choices:
+                sub_display_path = _format_source_path(sub_choice['source'])
                 icon = utils.get_source_icon(sub_choice['source'])
-                st.info(f"📌 **保存場所:** `{sub_choice['source']}`", icon=icon)
-                with st.expander(f"📄 {sub_choice['source']} の内容を確認"):
+                st.info(f"📌 **ファイルの保存先:** `{sub_display_path}`", icon=icon)
+                with st.expander(f"📄 データ内容を表示 ({os.path.basename(sub_choice['source'])})"):
                     st.markdown(sub_choice["content"])
         
         content = {
@@ -191,10 +212,11 @@ def display_contact_llm_response(llm_response):
                 continue
 
             file_path_list.append(file_path)
+            display_path = _format_source_path(file_path)
             icon = utils.get_source_icon(file_path)
             
-            st.info(f"📌 **保存場所:** `{file_path}`", icon=icon)
-            with st.expander("📄 参照したデータ内容を表示"):
+            st.info(f"📌 **ファイルの保存先:** `{display_path}`", icon=icon)
+            with st.expander(f"📄 参照されたデータ内容を表示 ({os.path.basename(file_path)})"):
                 st.markdown(document.page_content)
 
             file_info_list.append({

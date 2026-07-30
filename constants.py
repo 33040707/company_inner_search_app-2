@@ -1,103 +1,155 @@
-"""
-このファイルは、固定の文字列や数値などのデータを変数として一括管理するファイルです。
-"""
-
 import os
-from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, TextLoader
-from langchain_community.document_loaders.csv_loader import CSVLoader
+import glob
+import base64
+import fitz          # PyMuPDF
+import openai
+import pandas as pd
+from docx import Document
+from dotenv import load_dotenv
 
-# ==========================================
-# 画面表示系
-# ==========================================
-APP_NAME = "社内情報特化型生成AI検索アプリ"
-ANSWER_MODE_1 = "社内文書検索"
-ANSWER_MODE_2 = "社内問い合わせ"
-CHAT_INPUT_HELPER_TEXT = "こちらからメッセージを送信してください。"
-DOC_SOURCE_ICON = ":material/description: "
-LINK_SOURCE_ICON = ":material/link: "
-WARNING_ICON = ":material/warning:"
-ERROR_ICON = ":material/error:"
-SPINNER_TEXT = "回答生成中..."
+# .envファイルからAPIキーを読み込む
+load_dotenv()
+client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ==========================================
-# ログ出力系
-# ==========================================
-LOG_DIR_PATH = os.path.join(os.getcwd(), "logs")
-LOGGER_NAME = "ApplicationLog"
-LOG_FILE = "application.log"
-APP_BOOT_MESSAGE = "アプリが起動されました。"
+# データが格納されているフォルダ
+DATA_FOLDER = "data"
 
-# ==========================================
-# LLM設定系
-# ==========================================
-MODEL = "gpt-4o-mini"
-TEMPERATURE = 0.5
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 50
-TOP_K = 5
 
-# ==========================================
-# RAG参照用のデータソース系
-# ==========================================
-RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
-SUPPORTED_EXTENSIONS = {
-    ".pdf": PyMuPDFLoader,
-    ".docx": Docx2txtLoader,
-    ".csv": lambda path: CSVLoader(path, encoding="utf-8"),
-    ".txt": lambda path: TextLoader(path, encoding="utf-8")
-}
-CSV_INTEGRATION_TARGETS = [
-    "社員名簿.csv"
-]
-WEB_URL_LOAD_TARGETS = [
-    "https://generative-ai.web-camp.io/"
-]
+def process_pdf(file_path):
+    """PDFを画像化し、GPT-4o Visionで読み取る"""
+    doc = fitz.open(file_path)
+    full_text = ""
+    for page_num, page in enumerate(doc):
+        print(f"   ... ページ {page_num + 1}/{len(doc)} をAIで読み取り中 ...")
+        # 高画質(dpi=400)で画像化
+        pix = page.get_pixmap(dpi=400)
+        img_bytes = pix.tobytes("jpeg")
+        base64_image = base64.b64encode(img_bytes).decode('utf-8')
+        
+        # GPT-4oの視覚機能でテキスト化
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "この画像は建設・設計などの業務に関する価格表や仕様書などの社内資料です。表の構造や数値を正確にマークダウン形式で書き起こしてください。"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
+                                "detail": "high"
+                            },
+                        },
+                    ],
+                }
+            ],
+            max_tokens=3000,
+            temperature=0.0,
+        )
+        full_text += response.choices[0].message.content + "\n\n"
+    return full_text
 
-# ==========================================
-# プロンプトテンプレート
-# ==========================================
-SYSTEM_PROMPT_CREATE_INDEPENDENT_TEXT = "会話履歴と最新の入力をもとに、会話履歴なしでも理解できる独立した入力テキストを生成してください。"
 
-# 社内文書検索用プロンプト（完全復元）
-SYSTEM_PROMPT_DOC_SEARCH = """
-    あなたは社内の文書検索アシスタントです。
-    以下の条件に基づき、ユーザー入力に対して回答してください。
+def process_docx(file_path):
+    """Wordファイルからテキストと表データを抽出する"""
+    doc = Document(file_path)
+    full_text = ""
+    
+    # 段落（通常の文章）の抽出
+    for para in doc.paragraphs:
+        if para.text.strip():
+            full_text += para.text + "\n"
+            
+    full_text += "\n"
+    
+    # 表（テーブル）の抽出
+    for table in doc.tables:
+        for row in table.rows:
+            row_data = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+            full_text += " | ".join(row_data) + "\n"
+        full_text += "\n"
+        
+    return full_text
 
-    【条件】
-    1. ユーザー入力内容と以下の文脈との間に関連性がある場合、資料の内容を簡潔に要約して回答してください。
-    2. ユーザー入力内容と以下の文脈との関連性が明らかに低い場合、「該当資料なし」と回答してください。
 
-    【文脈】
-    {context}
-"""
+def process_xlsx(file_path):
+    """Excelファイルから全シートのデータを抽出する"""
+    xls = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
+    full_text = ""
+    
+    for sheet_name, df in xls.items():
+        full_text += f"## シート名: {sheet_name}\n\n"
+        # 欠損値を空文字にし、CSV形式でテキスト化することでAIが構造を理解しやすくする
+        full_text += df.fillna("").to_csv(index=False) + "\n\n"
+        
+    return full_text
 
-# 社内問い合わせ用プロンプト（参照ドキュメント本文から回答させる指示）
-SYSTEM_PROMPT_INQUIRY = """
-    あなたは社内情報特化型のアシスタントです。
-    ユーザーの質問に対して、提供された【参照ドキュメント本文】の情報に基づき、分かりやすく詳細に回答を作成してください。
 
-    【条件】
-    1. 提供された参照ドキュメント本文の内容をしっかり読み取り、質問に対する具体的な回答を作成してください。
-    2. 参照ドキュメント本文に全く関連情報が含まれていない場合のみ、「回答に必要な情報が見つかりませんでした。」と回答してください。
-    3. 憶測で回答せず、できる限り提供されたドキュメントの内容に基づいて回答してください。
-    4. マークダウン記法（箇条書きや強調表示）を活用して読みやすく回答してください。
-"""
+def convert_all_docs_to_text():
+    abs_data_path = os.path.abspath(DATA_FOLDER)
+    print(f"🔍 検索対象フォルダ: {abs_data_path}")
 
-# ==========================================
-# LLMレスポンスの一致判定用
-# ==========================================
-INQUIRY_NO_MATCH_ANSWER = "回答に必要な情報が見つかりませんでした。"
-NO_DOC_MATCH_ANSWER = "該当資料なし"
+    if not os.path.exists(DATA_FOLDER):
+        print(f"⚠️ '{DATA_FOLDER}' フォルダが存在しません。新規作成します。")
+        os.makedirs(DATA_FOLDER, exist_ok=True)
+        print("フォルダの中にPDF/DOCX/XLSXファイルを配置して再実行してください。")
+        return
 
-# ==========================================
-# エラー・警告メッセージ
-# ==========================================
-COMMON_ERROR_MESSAGE = "このエラーが繰り返し発生する場合は、管理者にお問い合わせください。"
-INITIALIZE_ERROR_MESSAGE = "初期化処理に失敗しました。"
-NO_DOC_MATCH_MESSAGE = """
-    入力内容と関連する社内文書が見つかりませんでした。\n
-    入力内容を変更してください。
-"""
-CONVERSATION_LOG_ERROR_MESSAGE = "過去の会話履歴の表示に失敗しました。"
-GET_LLM_RESPONSE_ERROR_MESSAGE = "回答生成に失敗しました。"
-DISP_ANSWER_ERROR_MESSAGE = "回答表示に失敗しました。"
+    # Subfolder含む全ファイルを探索 (大文字小文字対応)
+    target_files = []
+    valid_extensions = {".pdf", ".docx", ".xlsx"}
+    
+    for root, _, files in os.walk(DATA_FOLDER):
+        for file in files:
+            ext = os.path.splitext(file)[1].lower()
+            if ext in valid_extensions:
+                target_files.append(os.path.join(root, file))
+
+    if not target_files:
+        print("\n⚠️ dataフォルダ内に変換対象のファイルが見つかりません。")
+        print("【確認チェック】")
+        print(f"1. 以下のフォルダ内にファイルを移動・配置してください：\n   {abs_data_path}")
+        print("2. 対応拡張子: .pdf / .docx / .xlsx (大文字・小文字問わず)")
+        return
+
+    print(f"\n📄 {len(target_files)}件のファイルが見つかりました。変換処理を開始します...\n")
+
+    for file_path in target_files:
+        file_name = os.path.basename(file_path)
+        base_name = os.path.splitext(file_name)[0]
+        ext = os.path.splitext(file_name)[1].lower()
+        
+        # 出力先テキストファイル（data直下に作成）
+        output_txt_path = os.path.join(DATA_FOLDER, f"{base_name}.txt")
+        
+        # すでに同名のテキストファイルが存在する場合はスキップ
+        if os.path.exists(output_txt_path):
+            print(f"⏭️ スキップ: {output_txt_path} は既に変換済みです。")
+            continue
+            
+        print(f"🔄 変換を開始します: {file_name}")
+        try:
+            if ext == ".pdf":
+                text_data = process_pdf(file_path)
+            elif ext == ".docx":
+                text_data = process_docx(file_path)
+            elif ext == ".xlsx":
+                text_data = process_xlsx(file_path)
+            else:
+                continue
+
+            # テキストファイルとして保存
+            with open(output_txt_path, "w", encoding="utf-8") as f:
+                f.write(text_data)
+            
+            print(f"✅ 変換完了！ {output_txt_path} に保存しました。\n")
+            
+        except Exception as e:
+            print(f"❌ エラーが発生しました ({file_name}): {e}\n")
+
+    print("🎉 すべての処理が完了しました。")
+
+
+if __name__ == "__main__":
+    convert_all_docs_to_text()

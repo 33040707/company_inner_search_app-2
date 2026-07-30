@@ -1,5 +1,5 @@
 """
-このファイルは、最初の画面読み込み時にのみ実行される初期化処理が記述されたファイルです。
+初期化処理モジュール
 """
 
 import os
@@ -9,6 +9,7 @@ from uuid import uuid4
 import sys
 import unicodedata
 import streamlit as st
+
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import CharacterTextSplitter
@@ -17,17 +18,17 @@ from langchain_community.vectorstores import Chroma
 import constants as ct
 
 def initialize():
-    """画面読み込み時に実行する初期化処理"""
+    """初期化エントリーポイント"""
     os.makedirs(ct.RAG_TOP_FOLDER_PATH, exist_ok=True)
     os.makedirs(ct.LOG_DIR_PATH, exist_ok=True)
     
-    initialize_session_state()
     initialize_session_id()
     initialize_logger()
+    initialize_session_state()
     initialize_retriever()
 
 def initialize_logger():
-    """ログ出力の設定"""
+    """ログ設定"""
     logger = logging.getLogger(ct.LOGGER_NAME)
     if logger.hasHandlers():
         return
@@ -38,34 +39,36 @@ def initialize_logger():
         encoding="utf8"
     )
     formatter = logging.Formatter(
-        f"[%(levelname)s] %(asctime)s line %(lineno)s, in %(funcName)s, session_id={st.session_state.session_id}: %(message)s"
+        f"[%(levelname)s] %(asctime)s line %(lineno)s, in %(funcName)s, session_id={st.session_state.get('session_id', 'N/A')}: %(message)s"
     )
     log_handler.setFormatter(formatter)
     logger.setLevel(logging.INFO)
     logger.addHandler(log_handler)
 
 def initialize_session_id():
-    """セッションIDの作成"""
+    """セッションIDの発行"""
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid4().hex
 
+def initialize_session_state():
+    """セッション変数の保持"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
 def initialize_retriever():
-    """画面読み込み時にRAGのRetrieverを作成"""
-    logger = logging.getLogger(ct.LOGGER_NAME)
+    """Chroma VectorStoreおよびRetrieverの初期化"""
     if "retriever" in st.session_state:
         return
-    
+
     docs_all, integrated_docs_all = load_data_sources()
 
-    for doc in docs_all:
+    for doc in docs_all + integrated_docs_all:
         doc.page_content = adjust_string(doc.page_content)
-        for key in doc.metadata:
-            doc.metadata[key] = adjust_string(doc.metadata[key])
-    for doc in integrated_docs_all:
-        doc.page_content = adjust_string(doc.page_content)
-        for key in doc.metadata:
-            doc.metadata[key] = adjust_string(doc.metadata[key])
-    
+        for k, v in list(doc.metadata.items()):
+            doc.metadata[k] = adjust_string(v)
+
     embeddings = OpenAIEmbeddings()
     text_splitter = CharacterTextSplitter(
         chunk_size=ct.CHUNK_SIZE,
@@ -77,77 +80,63 @@ def initialize_retriever():
     splitted_docs.extend(integrated_docs_all)
 
     if not splitted_docs:
-        splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
+        splitted_docs = [Document(page_content="社内情報データが見つかりませんでした。", metadata={"source": "system"})]
 
-    db = Chroma.from_documents(splitted_docs, embedding=embeddings)
+    db = Chroma.from_documents(
+        documents=splitted_docs,
+        embedding=embeddings,
+        persist_directory=ct.CHROMA_PERSIST_DIR
+    )
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
-def initialize_session_state():
-    """初期化データの用意"""
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-        st.session_state.chat_history = []
-
 def load_data_sources():
-    """RAGの参照先となるデータソースの読み込み"""
+    """各種データソースからのドキュメント読込"""
     docs_all = []
     integrated_docs_all = []
     
     if os.path.exists(ct.RAG_TOP_FOLDER_PATH):
         recursive_file_check(ct.RAG_TOP_FOLDER_PATH, docs_all, integrated_docs_all)
 
-    web_docs_all = []
     for web_url in ct.WEB_URL_LOAD_TARGETS:
         try:
             loader = WebBaseLoader(web_url)
-            web_docs = loader.load()
-            web_docs_all.extend(web_docs)
+            docs_all.extend(loader.load())
         except Exception as e:
-            logging.getLogger(ct.LOGGER_NAME).warning(f"Web Load Error: {e}")
+            logging.getLogger(ct.LOGGER_NAME).warning(f"Web Load Error ({web_url}): {e}")
             
-    docs_all.extend(web_docs_all)
     return docs_all, integrated_docs_all
 
 def recursive_file_check(path, docs_all, integrated_docs_all):
-    """ファイル再帰チェック"""
     if os.path.isdir(path):
-        files = os.listdir(path)
-        for file in files:
-            full_path = os.path.join(path, file)
-            recursive_file_check(full_path, docs_all, integrated_docs_all)
+        for file in os.listdir(path):
+            recursive_file_check(os.path.join(path, file), docs_all, integrated_docs_all)
     else:
         file_load(path, docs_all, integrated_docs_all)
 
 def file_load(path, docs_all, integrated_docs_all):
-    """ファイル内のデータ読み込み"""
     file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:
         try:
-            loader = ct.SUPPORTED_EXTENSIONS[file_extension](path)
+            loader_func = ct.SUPPORTED_EXTENSIONS[file_extension]
+            loader = loader_func(path)
             docs = loader.load()
-            if not file_name in ct.CSV_INTEGRATION_TARGETS:
+
+            if file_name not in ct.CSV_INTEGRATION_TARGETS:
                 docs_all.extend(docs)
             else:
-                doc_content = ""
-                for row in docs:
-                    page_content = row.page_content
-                    value_list = page_content.split("\n")
-                    row_data = "\n".join(value_list)
-                    doc_content += row_data + "\n=================================\n"
-                
-                new_doc = Document(page_content=doc_content, metadata={"source": path})
-                integrated_docs_all.append(new_doc)
+                doc_content = "\n=================================\n".join(
+                    [d.page_content for d in docs]
+                )
+                integrated_docs_all.append(Document(page_content=doc_content, metadata={"source": path}))
         except Exception as e:
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
 
 def adjust_string(s):
-    """Windows環境でRAGが正常動作するよう調整"""
-    if type(s) is not str:
+    if not isinstance(s, str):
         return s
     if sys.platform.startswith("win"):
         s = unicodedata.normalize('NFC', s)
-        s = s.encode("cp932", "ignore").decode("cp932")
-        return s
+        return s.encode("cp932", "ignore").decode("cp932")
     return s

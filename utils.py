@@ -80,7 +80,7 @@ def get_llm_response(chat_message):
 
     # 画面表示用のレスポンス辞書を作成
     llm_response = {
-        "answer": answer_msg.content,
+        "answer": answer_msg.content.strip(),
         "context": docs
     }
 

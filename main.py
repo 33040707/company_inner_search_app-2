@@ -2,12 +2,18 @@
 このファイルは、Webアプリのメイン処理が記述されたファイルです。
 """
 
+import os
 import logging
 import streamlit as st
-import utils
-from initialize import initialize
-import components as cn
+
+# Streamlit SecretsからAPIキーを環境変数に反映
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+
 import constants as ct
+import utils
+import components as cn
+from initialize import initialize
 
 st.set_page_config(
     page_title=ct.APP_NAME
@@ -22,7 +28,7 @@ except Exception as e:
     st.error(utils.build_error_message(ct.INITIALIZE_ERROR_MESSAGE), icon=ct.ERROR_ICON)
     st.stop()
 
-if not "initialized" in st.session_state:
+if "initialized" not in st.session_state:
     st.session_state.initialized = True
     logger.info(ct.APP_BOOT_MESSAGE)
 

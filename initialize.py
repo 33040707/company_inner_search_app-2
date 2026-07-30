@@ -11,12 +11,12 @@ import unicodedata
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
 
-# SecretsからAPIキーを設定
+# Streamlit CloudのSecretsからAPIキーを設定
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 
@@ -71,12 +71,10 @@ def initialize_retriever():
             doc.metadata[key] = adjust_string(doc.metadata[key])
     
     embeddings = OpenAIEmbeddings()
-
-    # 単価表等の構造崩れを防ぐため RecursiveCharacterTextSplitter を採用
-    text_splitter = RecursiveCharacterTextSplitter(
+    text_splitter = CharacterTextSplitter(
         chunk_size=ct.CHUNK_SIZE,
         chunk_overlap=ct.CHUNK_OVERLAP,
-        separators=["\n\n", "\n", " ", ""]
+        separator="\n"
     )
 
     splitted_docs = text_splitter.split_documents(docs_all)

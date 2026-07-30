@@ -11,7 +11,7 @@ import unicodedata
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
@@ -57,20 +57,27 @@ def initialize_retriever():
     
     docs_all, integrated_docs_all = load_data_sources()
 
+    # 文字列の正規化処理
     for doc in docs_all:
         doc.page_content = adjust_string(doc.page_content)
         for key in list(doc.metadata.keys()):
-            doc.metadata[key] = adjust_string(doc.metadata[key])
+            if isinstance(doc.metadata[key], str):
+                doc.metadata[key] = adjust_string(doc.metadata[key])
+                
     for doc in integrated_docs_all:
         doc.page_content = adjust_string(doc.page_content)
         for key in list(doc.metadata.keys()):
-            doc.metadata[key] = adjust_string(doc.metadata[key])
+            if isinstance(doc.metadata[key], str):
+                doc.metadata[key] = adjust_string(doc.metadata[key])
     
     embeddings = OpenAIEmbeddings()
-    text_splitter = CharacterTextSplitter(
+    
+    # 【重要修正】CharacterTextSplitter から RecursiveCharacterTextSplitter に変更
+    # これにより、PDFやtxtの改行位置に依存せず安全にチャンク分割されます
+    text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=ct.CHUNK_SIZE,
         chunk_overlap=ct.CHUNK_OVERLAP,
-        separator="\n"
+        separators=["\n\n", "\n", "。", "、", " ", ""]
     )
 
     splitted_docs = text_splitter.split_documents(docs_all)
@@ -123,7 +130,7 @@ def file_load(path, docs_all, integrated_docs_all):
     file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
 
-    # 同名の .txt ファイルが変換済みとして存在する場合はPDFの読み込みを重複防止のためスキップ
+    # 同名の .txt ファイルが作成済みの場合はPDF読み込みをスキップして二重化を防止
     base_name = os.path.splitext(path)[0]
     txt_counterpart = f"{base_name}.txt"
     if file_extension == ".pdf" and os.path.exists(txt_counterpart):

@@ -6,9 +6,11 @@ import streamlit as st
 import utils
 import constants as ct
 
+
 def display_app_title():
     """タイトル表示"""
     st.markdown(f"## {ct.APP_NAME}")
+
 
 def display_sidebar():
     """サイドバーの表示"""
@@ -25,18 +27,20 @@ def display_sidebar():
         st.divider()
 
         st.markdown("**【「社内文書検索」を選択した場合】**")
-        st.info("入力内容と関連性が高い社内文書のありか（保存先）を検索できます。")
+        st.info("入力内容と関連性が高い社内文書のありかを検索できます。")
         st.code("【入力例】\n社員の育成方針に関するMTGの議事録", wrap_lines=True, language=None)
 
         st.markdown("**【「社内問い合わせ」を選択した場合】**")
-        st.info("質問・要望に対して、PDF等の社内文書の内容をもとに直接回答を得られます。")
+        st.info("質問・要望に対して、社内文書の情報をもとに回答を得られます。")
         st.code("【入力例】\n人事部に所属している従業員情報を一覧化して", wrap_lines=True, language=None)
+
 
 def display_initial_ai_message():
     """AIメッセージの初期表示"""
     with st.chat_message("assistant"):
         st.success("こんにちは。私は社内文書の情報をもとに回答する生成AIチャットボットです。サイドバーで利用目的を選択し、画面下部のチャット欄からメッセージを送信してください。")
         st.warning("具体的に入力したほうが期待通りの回答を得やすいです。", icon=ct.WARNING_ICON)
+
 
 def display_conversation_log():
     """会話ログの一覧表示"""
@@ -68,9 +72,7 @@ def display_conversation_log():
                     else:
                         st.markdown(message["content"]["answer"])
                 else:
-                    # 「社内問い合わせ」モード：生成された回答文を表示
                     st.markdown(message["content"]["answer"])
-                    # 情報源（参照先PDFの保存元）を表示
                     if "file_info_list" in message["content"]:
                         st.divider()
                         st.markdown(f"##### {message['content']['message']}")
@@ -78,12 +80,14 @@ def display_conversation_log():
                             icon = utils.get_source_icon(file_info)
                             st.info(file_info, icon=icon)
 
-def display_search_llm_response(llm_response):
-    """「社内文書検索」モードにおけるLLMレスポンス（保存先の案内）を表示"""
-    if llm_response["context"] and llm_response["answer"] != ct.NO_DOC_MATCH_ANSWER:
-        # メインドキュメントのファイルパス（保存先）を取得
-        main_file_path = llm_response["context"][0].metadata["source"]
 
+def display_search_llm_response(llm_response):
+    """【変更なし】社内文書検索モードにおけるLLMレスポンスを表示"""
+    if llm_response["context"] and llm_response["answer"] != ct.NO_DOC_MATCH_ANSWER:
+        if llm_response["answer"]:
+            st.markdown(llm_response["answer"])
+
+        main_file_path = llm_response["context"][0].metadata["source"]
         main_message = "入力内容に関する情報は、以下のファイルに含まれている可能性があります。"
         st.markdown(main_message)
         
@@ -94,13 +98,16 @@ def display_search_llm_response(llm_response):
         else:
             st.success(f"{main_file_path}", icon=icon)
 
-        # サブドキュメント候補の抽出
         sub_choices = []
-        duplicate_check_list = [main_file_path]
+        duplicate_check_list = []
 
         for document in llm_response["context"][1:]:
-            sub_file_path = document.metadata.get("source", "")
-            if not sub_file_path or sub_file_path in duplicate_check_list:
+            sub_file_path = document.metadata["source"]
+
+            if sub_file_path == main_file_path:
+                continue
+            
+            if sub_file_path in duplicate_check_list:
                 continue
 
             duplicate_check_list.append(sub_file_path)
@@ -116,6 +123,7 @@ def display_search_llm_response(llm_response):
         if sub_choices:
             sub_message = "その他、ファイルありかの候補を提示します。"
             st.markdown(sub_message)
+
             for sub_choice in sub_choices:
                 icon = utils.get_source_icon(sub_choice['source'])
                 if "page_number" in sub_choice:
@@ -123,41 +131,43 @@ def display_search_llm_response(llm_response):
                 else:
                     st.info(f"{sub_choice['source']}", icon=icon)
         
-        content = {
-            "mode": ct.ANSWER_MODE_1,
-            "answer": "該当する文書の保存場所を表示します。",
-            "main_message": main_message,
-            "main_file_path": main_file_path
-        }
+        content = {}
+        content["mode"] = ct.ANSWER_MODE_1
+        content["answer"] = llm_response["answer"]
+        content["main_message"] = main_message
+        content["main_file_path"] = main_file_path
         if "page" in llm_response["context"][0].metadata:
             content["main_page_number"] = main_page_number
         if sub_choices:
             content["sub_message"] = sub_message
             content["sub_choices"] = sub_choices
+    
     else:
         st.markdown(ct.NO_DOC_MATCH_MESSAGE)
-        content = {
-            "mode": ct.ANSWER_MODE_1,
-            "answer": ct.NO_DOC_MATCH_MESSAGE,
-            "no_file_path_flg": True
-        }
+
+        content = {}
+        content["mode"] = ct.ANSWER_MODE_1
+        content["answer"] = ct.NO_DOC_MATCH_MESSAGE
+        content["no_file_path_flg"] = True
     
     return content
 
+
 def display_contact_llm_response(llm_response):
-    """「社内問い合わせ」モードにおけるLLMレスポンス（PDF内容の回答）を表示"""
-    # PDFから読み取った本文に基づき生成された回答メッセージを表示
+    """【修正箇所】「社内問い合わせ」モードにおけるLLMレスポンス（PDF本文からの生成回答）を表示"""
+    # LLMが作成した回答（PDFの内容）を画面に表示
     st.markdown(llm_response["answer"])
 
+    # 該当情報が存在した場合のみ、参照元の情報源（PDFファイル名等）を下に表示
     file_info_list = []
+    message = "情報源"
     if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER and llm_response["context"]:
         st.divider()
-        message = "情報源"
         st.markdown(f"##### {message}")
 
         file_path_list = []
         for document in llm_response["context"]:
-            file_path = document.metadata.get("source", "不明なソース")
+            file_path = document.metadata.get("source", "不明なファイル")
             if file_path in file_path_list:
                 continue
 
@@ -173,12 +183,11 @@ def display_contact_llm_response(llm_response):
             file_path_list.append(file_path)
             file_info_list.append(file_info)
 
-    content = {
-        "mode": ct.ANSWER_MODE_2,
-        "answer": llm_response["answer"]
-    }
+    content = {}
+    content["mode"] = ct.ANSWER_MODE_2
+    content["answer"] = llm_response["answer"]
     if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER and file_info_list:
-        content["message"] = "情報源"
+        content["message"] = message
         content["file_info_list"] = file_info_list
 
     return content

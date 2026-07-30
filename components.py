@@ -17,7 +17,7 @@ def display_sidebar():
         col1, _ = st.columns([100, 1])
         with col1:
             st.session_state.mode = st.radio(
-                label="",
+                label="利用目的の選択",
                 options=[ct.ANSWER_MODE_1, ct.ANSWER_MODE_2],
                 label_visibility="collapsed"
             )

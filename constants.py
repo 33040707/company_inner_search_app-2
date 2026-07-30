@@ -3,7 +3,7 @@
 """
 
 import os
-from langchain_community.document_loaders import Docx2txtLoader, TextLoader
+from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, TextLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
 
 # ==========================================
@@ -31,7 +31,8 @@ APP_BOOT_MESSAGE = "アプリが起動されました。"
 # LLM設定系
 # ==========================================
 MODEL = "gpt-4o-mini"
-TEMPERATURE = 0.2
+TEMPERATURE = 0.5
+# 👇 安定動作していた元のサイズに戻しました
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 TOP_K = 5
@@ -41,11 +42,10 @@ TOP_K = 5
 # ==========================================
 RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
 SUPPORTED_EXTENSIONS = {
-    ".txt": lambda path: TextLoader(path, encoding="utf-8"),
+    ".pdf": PyMuPDFLoader,
     ".docx": Docx2txtLoader,
     ".csv": lambda path: CSVLoader(path, encoding="utf-8"),
-    # PDFはconvert_docs.pyでテキスト化した.txtを参照するため、直接ロードから除外
-    # ".pdf": PDFPlumberLoader,
+    ".txt": lambda path: TextLoader(path, encoding="utf-8")
 }
 CSV_INTEGRATION_TARGETS = [
     "社員名簿.csv"
@@ -61,11 +61,11 @@ SYSTEM_PROMPT_CREATE_INDEPENDENT_TEXT = "会話履歴と最新の入力をもと
 
 SYSTEM_PROMPT_DOC_SEARCH = """
     あなたは社内の文書検索アシスタントです。
-    以下の【文脈】に基づき、ユーザー入力に対して回答してください。
+    以下の条件に基づき、ユーザー入力に対して回答してください。
 
     【条件】
     1. ユーザー入力内容と以下の文脈との間に関連性がある場合、資料の内容を簡潔に要約して回答してください。
-    2. ユーザー入力内容と以下の文脈との関連性が明らかに低い場合のみ、「該当資料なし」と回答してください。
+    2. ユーザー入力内容と以下の文脈との関連性が明らかに低い場合、「該当資料なし」と回答してください。
 
     【文脈】
     {context}
@@ -73,15 +73,17 @@ SYSTEM_PROMPT_DOC_SEARCH = """
 
 SYSTEM_PROMPT_INQUIRY = """
     あなたは社内情報特化型のアシスタントです。
-    以下の【文脈】に含まれている情報を正確に読み取り、ユーザーの質問に回答してください。
+    以下の条件に基づき、ユーザー入力に対して回答してください。
 
     【条件】
-    1. 【文脈】の中に質問に関連する情報（職種名、単価、金額、数値、仕様などのデータ）が存在する場合は、それらを可能な限り具体的に抽出・整理し、表や箇条書き等を用いて分かりやすく回答してください。
-    2. 質問に関連する情報が【文脈】に一切含まれていない場合のみ、「回答に必要な情報が見つかりませんでした。」と回答してください。
-    3. 推測や文脈にない一般的な知識で補完せず、あくまで【文脈】の情報に基づいて回答してください。
-    4. マークダウン記法を用いて回答してください。
+    1. ユーザー入力内容と以下の文脈との間に関連性がある場合のみ、以下の文脈に基づいて回答してください。
+    2. ユーザー入力内容と以下の文脈との関連性が明らかに低い場合、「回答に必要な情報が見つかりませんでした。」と回答してください。
+    3. 憶測で回答せず、あくまで以下の文脈を元に回答してください。
+    4. できる限り詳細に、マークダウン記法を使って回答してください。
+    5. マークダウン記法で回答する際にhタグの見出しを使う場合、最も大きい見出しをh3としてください。
+    6. 複雑な質問の場合、各項目についてそれぞれ詳細に回答してください。
+    7. 必要と判断した場合は、以下の文脈に基づかずとも、一般的な情報を回答してください。
 
-    【文脈】
     {context}
 """
 

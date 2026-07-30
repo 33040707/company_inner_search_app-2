@@ -6,6 +6,7 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from uuid import uuid4
+import sys
 import unicodedata
 import streamlit as st
 from langchain_core.documents import Document
@@ -15,10 +16,6 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
 
-# Streamlit CloudのSecretsからAPIキーを設定
-if "OPENAI_API_KEY" in st.secrets:
-    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-
 def initialize():
     """画面読み込み時に実行する初期化処理"""
     os.makedirs(ct.RAG_TOP_FOLDER_PATH, exist_ok=True)
@@ -27,10 +24,7 @@ def initialize():
     initialize_session_state()
     initialize_session_id()
     initialize_logger()
-    
-    # キャッシュ化したRetrieverの作成関数を呼び出す
-    if "retriever" not in st.session_state:
-        st.session_state.retriever = get_cached_retriever()
+    initialize_retriever()
 
 def initialize_logger():
     """ログ出力の設定"""
@@ -55,10 +49,12 @@ def initialize_session_id():
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid4().hex
 
-# 💡 @st.cache_resource を追加して、ChromaDBの作成結果をメモリに保持（再作成を防止）
-@st.cache_resource(show_spinner="データベースのインデックスを作成中...")
-def get_cached_retriever():
-    """RAGのRetrieverを作成・キャッシュ化"""
+def initialize_retriever():
+    """画面読み込み時にRAGのRetrieverを作成"""
+    logger = logging.getLogger(ct.LOGGER_NAME)
+    if "retriever" in st.session_state:
+        return
+    
     docs_all, integrated_docs_all = load_data_sources()
 
     for doc in docs_all:
@@ -84,7 +80,7 @@ def get_cached_retriever():
         splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
 
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
-    return db.as_retriever(search_kwargs={"k": ct.TOP_K})
+    st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
 def initialize_session_state():
     """初期化データの用意"""
@@ -147,7 +143,11 @@ def file_load(path, docs_all, integrated_docs_all):
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
 
 def adjust_string(s):
-    """文字列の正規化処理"""
-    if not isinstance(s, str):
+    """Windows環境でRAGが正常動作するよう調整"""
+    if type(s) is not str:
         return s
-    return unicodedata.normalize('NFC', s)
+    if sys.platform.startswith("win"):
+        s = unicodedata.normalize('NFC', s)
+        s = s.encode("cp932", "ignore").decode("cp932")
+        return s
+    return s

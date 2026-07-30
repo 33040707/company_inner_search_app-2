@@ -3,20 +3,11 @@
 """
 
 import os
-import logging
 import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
 import constants as ct
-
-# Streamlit CloudのSecretsからAPIキーを設定
-if "OPENAI_API_KEY" in st.secrets:
-    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-
-# 実行時に API キーが設定されているかチェック
-if not os.getenv("OPENAI_API_KEY"):
-    logging.getLogger(ct.LOGGER_NAME).warning("OPENAI_API_KEY is not set in environment. LLM calls will fail.")
 
 def get_source_icon(source):
     """メッセージと一緒に表示するアイコンの種類を取得"""
@@ -34,7 +25,7 @@ def build_error_message(message):
 
 
 def get_llm_response(chat_message):
-    """LLMからの回答取得"""
+    """LLMからの回答取得（バージョン依存をなくした直接記述版）"""
     llm = ChatOpenAI(model_name=ct.MODEL, temperature=ct.TEMPERATURE)
 
     # ==========================================
@@ -46,39 +37,20 @@ def get_llm_response(chat_message):
             MessagesPlaceholder("chat_history"),
             ("human", "{input}")
         ])
+        # 履歴がある場合はLLMに文脈を理解させた独立クエリを作らせる
         search_query_msg = (question_generator_prompt | llm).invoke({
             "input": chat_message,
             "chat_history": st.session_state.chat_history
         })
         search_query = search_query_msg.content
     else:
+        # 履歴がなければ入力値をそのまま検索クエリとする
         search_query = chat_message
 
     # ==========================================
     # 2. ドキュメントの検索
     # ==========================================
-    # Retriever の呼び出しは実装によりメソッド名が異なるため柔軟に対応
-    retriever = st.session_state.get("retriever")
-    docs = []
-    try:
-        if retriever is None:
-            logging.getLogger(ct.LOGGER_NAME).warning("retriever is not initialized in session_state")
-            docs = []
-        elif hasattr(retriever, "get_relevant_documents"):
-            docs = retriever.get_relevant_documents(search_query)
-        elif hasattr(retriever, "retrieve"):
-            docs = retriever.retrieve(search_query)
-        elif callable(getattr(retriever, "invoke", None)):
-            docs = retriever.invoke(search_query)
-        else:
-            # 最後の手段として呼び出し可能オブジェクトとして試す
-            try:
-                docs = retriever(search_query)
-            except Exception:
-                docs = []
-    except Exception as e:
-        logging.getLogger(ct.LOGGER_NAME).warning(f"Retriever call failed: {e}")
-        docs = []
+    docs = st.session_state.retriever.invoke(search_query)
     
     # 検索したドキュメント群のテキストを結合
     context_text = "\n\n".join([doc.page_content for doc in docs])
@@ -106,11 +78,11 @@ def get_llm_response(chat_message):
 
     # 画面表示用のレスポンス辞書を作成
     llm_response = {
-        "answer": answer_msg.content.strip(),
+        "answer": answer_msg.content,
         "context": docs
     }
 
-    # LLMレスポンスを会話履歴に追加
+    # LLMレスポンスを会話履歴に追加（次回以降の文脈考慮のため）
     st.session_state.chat_history.extend([
         HumanMessage(content=chat_message), 
         AIMessage(content=answer_msg.content)

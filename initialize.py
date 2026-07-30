@@ -1,5 +1,5 @@
 """
-初期化処理モジュール
+初期化処理モジュール（PDF・TXT読み込みログ強化版）
 """
 
 import os
@@ -59,6 +59,8 @@ def initialize_session_state():
 
 def initialize_retriever():
     """Chroma VectorStoreおよびRetrieverの初期化"""
+    logger = logging.getLogger(ct.LOGGER_NAME)
+    
     if "retriever" in st.session_state:
         return
 
@@ -79,14 +81,16 @@ def initialize_retriever():
     splitted_docs = text_splitter.split_documents(docs_all)
     splitted_docs.extend(integrated_docs_all)
 
-    # 読み込み結果をログに出力（デバッグ用）
-    logger = logging.getLogger(ct.LOGGER_NAME)
-    logger.info(f"読み込まれたドキュメント分割数: {len(splitted_docs)}")
+    # 読み込んだドキュメント数と各文字数をログに出力
+    logger.info(f"--- RAGデータ読み込み診断 ---")
+    logger.info(f"読み込み成功ドキュメント分割数: {len(splitted_docs)}")
+    for i, doc in enumerate(splitted_docs[:5]): # 先頭5件を表示
+        logger.info(f"Doc {i+1} [{doc.metadata.get('source')}]: {len(doc.page_content)}文字 -> {doc.page_content[:50]}...")
 
-    if not splitted_docs:
+    if not splitted_docs or (len(splitted_docs) == 1 and "見つかりませんでした" in splitted_docs[0].page_content):
+        logger.warning("⚠️ 有効なドキュメントテキストが取得できていません。dataフォルダ内のファイルを確認してください。")
         splitted_docs = [Document(page_content="社内情報データが見つかりませんでした。", metadata={"source": "system"})]
 
-    # オンメモリで常に最新データをインデックス構築（古いキャッシュによる検索漏れを防止）
     db = Chroma.from_documents(
         documents=splitted_docs,
         embedding=embeddings
@@ -118,6 +122,7 @@ def recursive_file_check(path, docs_all, integrated_docs_all):
         file_load(path, docs_all, integrated_docs_all)
 
 def file_load(path, docs_all, integrated_docs_all):
+    logger = logging.getLogger(ct.LOGGER_NAME)
     file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
 
@@ -127,6 +132,10 @@ def file_load(path, docs_all, integrated_docs_all):
             loader = loader_func(path)
             docs = loader.load()
 
+            # テキストが空でないかチェック
+            total_chars = sum(len(d.page_content.strip()) for d in docs)
+            logger.info(f"ファイル読み込み成功: {file_name} (抽出文字数: {total_chars}文字)")
+
             if file_name not in ct.CSV_INTEGRATION_TARGETS:
                 docs_all.extend(docs)
             else:
@@ -135,7 +144,7 @@ def file_load(path, docs_all, integrated_docs_all):
                 )
                 integrated_docs_all.append(Document(page_content=doc_content, metadata={"source": path}))
         except Exception as e:
-            logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
+            logger.error(f"ファイル読み込みエラー ({file_name}): {e}")
 
 def adjust_string(s):
     if not isinstance(s, str):

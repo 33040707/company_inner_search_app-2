@@ -6,7 +6,6 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from uuid import uuid4
-import sys
 import unicodedata
 import streamlit as st
 from langchain_core.documents import Document
@@ -28,7 +27,10 @@ def initialize():
     initialize_session_state()
     initialize_session_id()
     initialize_logger()
-    initialize_retriever()
+    
+    # キャッシュ化したRetrieverの作成関数を呼び出す
+    if "retriever" not in st.session_state:
+        st.session_state.retriever = get_cached_retriever()
 
 def initialize_logger():
     """ログ出力の設定"""
@@ -53,12 +55,10 @@ def initialize_session_id():
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid4().hex
 
-def initialize_retriever():
-    """画面読み込み時にRAGのRetrieverを作成"""
-    logger = logging.getLogger(ct.LOGGER_NAME)
-    if "retriever" in st.session_state:
-        return
-    
+# 💡 @st.cache_resource を追加して、ChromaDBの作成結果をメモリに保持（再作成を防止）
+@st.cache_resource(show_spinner="データベースのインデックスを作成中...")
+def get_cached_retriever():
+    """RAGのRetrieverを作成・キャッシュ化"""
     docs_all, integrated_docs_all = load_data_sources()
 
     for doc in docs_all:
@@ -84,7 +84,7 @@ def initialize_retriever():
         splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
 
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
-    st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
+    return db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
 def initialize_session_state():
     """初期化データの用意"""

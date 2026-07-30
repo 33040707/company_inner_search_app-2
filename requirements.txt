@@ -11,3 +11,4 @@ docx2txt
 beautifulsoup4
 tiktoken
 pydantic>=2.0.0
+pdfplumber

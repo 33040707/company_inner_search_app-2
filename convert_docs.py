@@ -7,9 +7,18 @@ import pandas as pd
 from docx import Document
 from dotenv import load_dotenv
 
-# .envファイルからAPIキーを読み込む
+# .env ファイルから環境変数を読み込む（スクリプト冒頭で実行）
 load_dotenv()
-client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
+
+api_key = os.getenv("OPENAI_API_KEY")
+
+# APIキーが見つからない場合のフォールバック処理
+if not api_key:
+    # 直接コード内にキーがある場合の読み込み試行、または手動入力を促す
+    print("⚠️ OPENAI_API_KEY が環境変数から取得できませんでした。")
+    api_key = input("OpenAIのAPIキー（sk-...）を入力してください: ").strip()
+
+client = openai.Client(api_key=api_key)
 
 # データが格納されているフォルダ
 DATA_FOLDER = "data"

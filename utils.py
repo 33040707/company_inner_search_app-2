@@ -25,7 +25,7 @@ def build_error_message(message):
 
 
 def get_llm_response(chat_message):
-    """LLMからの回答取得"""
+    """LLMからの回答取得（バージョン依存をなくした直接記述版）"""
     llm = ChatOpenAI(model_name=ct.MODEL, temperature=ct.TEMPERATURE)
 
     # ==========================================
@@ -37,12 +37,14 @@ def get_llm_response(chat_message):
             MessagesPlaceholder("chat_history"),
             ("human", "{input}")
         ])
+        # 履歴がある場合はLLMに文脈を理解させた独立クエリを作らせる
         search_query_msg = (question_generator_prompt | llm).invoke({
             "input": chat_message,
             "chat_history": st.session_state.chat_history
         })
         search_query = search_query_msg.content
     else:
+        # 履歴がなければ入力値をそのまま検索クエリとする
         search_query = chat_message
 
     # ==========================================
@@ -58,33 +60,26 @@ def get_llm_response(chat_message):
     # ==========================================
     if st.session_state.mode == ct.ANSWER_MODE_1:
         question_answer_template = ct.SYSTEM_PROMPT_DOC_SEARCH
-        
         question_answer_prompt = ChatPromptTemplate.from_messages([
             ("system", question_answer_template),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}")
         ])
-
-        answer_msg = (question_answer_prompt | llm).invoke({
-            "context": context_text,
-            "input": chat_message,
-            "chat_history": st.session_state.chat_history
-        })
     else:
-        # 社内問い合わせ用：context をしっかりと人間からの入力・参照情報として渡す
+        # 社内問い合わせ用：PDFから取得したコンテキスト（{context}）をプロンプトへ組み込む
         question_answer_template = ct.SYSTEM_PROMPT_INQUIRY
-
         question_answer_prompt = ChatPromptTemplate.from_messages([
             ("system", question_answer_template),
             MessagesPlaceholder("chat_history"),
-            ("human", "【質問】\n{input}\n\n【参照ドキュメントの内容】\n{context}")
+            ("human", "【質問】\n{input}\n\n【参照ドキュメント本文】\n{context}")
         ])
 
-        answer_msg = (question_answer_prompt | llm).invoke({
-            "context": context_text,
-            "input": chat_message,
-            "chat_history": st.session_state.chat_history
-        })
+    # LLMから最終的な回答を取得
+    answer_msg = (question_answer_prompt | llm).invoke({
+        "context": context_text,
+        "input": chat_message,
+        "chat_history": st.session_state.chat_history
+    })
 
     # 画面表示用のレスポンス辞書を作成
     llm_response = {
@@ -92,7 +87,7 @@ def get_llm_response(chat_message):
         "context": docs
     }
 
-    # LLMレスポンスを会話履歴に追加
+    # LLMレスポンスを会話履歴に追加（次回以降の文脈考慮のため）
     st.session_state.chat_history.extend([
         HumanMessage(content=chat_message), 
         AIMessage(content=answer_msg.content)

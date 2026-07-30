@@ -3,7 +3,8 @@
 """
 
 import os
-from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, TextLoader
+# 👇 PyMuPDFLoader から、日本語に強い PDFPlumberLoader に変更しました
+from langchain_community.document_loaders import PDFPlumberLoader, Docx2txtLoader, TextLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
 
 # ==========================================
@@ -31,9 +32,7 @@ APP_BOOT_MESSAGE = "アプリが起動されました。"
 # LLM設定系
 # ==========================================
 MODEL = "gpt-4o-mini"
-# 👇 AIの勝手な判断（自由度）をゼロにします
 TEMPERATURE = 0.0
-# 👇 表データが途中で分断されないよう、読み込みサイズと件数を倍増させます
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 TOP_K = 10
@@ -43,7 +42,7 @@ TOP_K = 10
 # ==========================================
 RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
 SUPPORTED_EXTENSIONS = {
-    ".pdf": PyMuPDFLoader,
+    ".pdf": PDFPlumberLoader,  # 👈 ここを PDFPlumberLoader に変更しました
     ".docx": Docx2txtLoader,
     ".csv": lambda path: CSVLoader(path, encoding="utf-8"),
     ".txt": lambda path: TextLoader(path, encoding="utf-8")
@@ -60,7 +59,6 @@ WEB_URL_LOAD_TARGETS = [
 # ==========================================
 SYSTEM_PROMPT_CREATE_INDEPENDENT_TEXT = "会話履歴と最新の入力をもとに、会話履歴なしでも理解できる独立した入力テキストを生成してください。"
 
-# 👇 「該当資料なし」という回答を絶対禁止にしました
 SYSTEM_PROMPT_DOC_SEARCH = """
     あなたは社内の文書検索アシスタントです。
     ユーザー入力に対して、以下の【文脈】に記載されている情報を要約して回答してください。
@@ -73,7 +71,6 @@ SYSTEM_PROMPT_DOC_SEARCH = """
     {context}
 """
 
-# 👇 「回答に必要な情報が見つかりませんでした」という回答を絶対禁止にしました
 SYSTEM_PROMPT_INQUIRY = """
     あなたは社内情報特化型のアシスタントです。
     以下の【条件】に必ず従って回答してください。

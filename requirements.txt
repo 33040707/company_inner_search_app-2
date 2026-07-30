@@ -12,3 +12,4 @@ beautifulsoup4
 tiktoken
 pydantic>=2.0.0
 pdfplumber
+pypdfium2

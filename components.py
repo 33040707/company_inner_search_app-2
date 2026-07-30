@@ -72,20 +72,21 @@ def display_conversation_log():
                         st.markdown(message["content"]["main_message"])
 
                         icon = utils.get_source_icon(message['content']['main_file_path'])
-                        if "main_page_number" in message["content"]:
-                            st.success(f"{message['content']['main_file_path']}（ページNo.{message['content']['main_page_number']+1}）", icon=icon)
-                        else:
-                            st.success(f"{message['content']['main_file_path']}", icon=icon)
+                        st.success(f"📌 **保存場所:** `{message['content']['main_file_path']}`", icon=icon)
                         
+                        if "main_content" in message["content"]:
+                            with st.expander("📄 抽出されたデータ内容を確認"):
+                                st.markdown(message["content"]["main_content"])
+
                         if "sub_message" in message["content"]:
                             st.markdown(message["content"]["sub_message"])
 
                             for sub_choice in message["content"]["sub_choices"]:
                                 icon = utils.get_source_icon(sub_choice['source'])
-                                if "page_number" in sub_choice:
-                                    st.info(f"{sub_choice['source']}（ページNo.{sub_choice['page_number']+1}）", icon=icon)
-                                else:
-                                    st.info(f"{sub_choice['source']}", icon=icon)
+                                st.info(f"📌 **保存場所:** `{sub_choice['source']}`", icon=icon)
+                                if "content" in sub_choice:
+                                    with st.expander(f"📄 {sub_choice['source']} の内容を確認"):
+                                        st.markdown(sub_choice["content"])
                     else:
                         st.markdown(message["content"]["answer"])
                 else:
@@ -94,9 +95,12 @@ def display_conversation_log():
                     if "file_info_list" in message["content"]:
                         st.divider()
                         st.markdown(f"##### {message['content']['message']}")
-                        for file_info in message["content"]["file_info_list"]:
-                            icon = utils.get_source_icon(file_info)
-                            st.info(file_info, icon=icon)
+                        for file_item in message["content"]["file_info_list"]:
+                            icon = utils.get_source_icon(file_item["path"])
+                            st.info(f"📌 **保存場所:** `{file_item['path']}`", icon=icon)
+                            if file_item.get("content"):
+                                with st.expander("📄 参照したデータ内容を表示"):
+                                    st.markdown(file_item["content"])
 
 
 def display_search_llm_response(llm_response):
@@ -107,38 +111,32 @@ def display_search_llm_response(llm_response):
         if llm_response["answer"]:
             st.markdown(llm_response["answer"])
 
-        main_file_path = llm_response["context"][0].metadata["source"]
+        main_doc = llm_response["context"][0]
+        main_file_path = main_doc.metadata["source"]
+        main_file_content = main_doc.page_content
+
         main_message = "入力内容に関する情報は、以下のファイルに含まれている可能性があります。"
         st.markdown(main_message)
         
         icon = utils.get_source_icon(main_file_path)
-        if "page" in llm_response["context"][0].metadata:
-            main_page_number = llm_response["context"][0].metadata["page"]
-            st.success(f"{main_file_path}（ページNo.{main_page_number+1}）", icon=icon)
-        else:
-            st.success(f"{main_file_path}", icon=icon)
+        st.success(f"📌 **保存場所:** `{main_file_path}`", icon=icon)
+        with st.expander("📄 抽出されたデータ内容を確認"):
+            st.markdown(main_file_content)
 
         sub_choices = []
-        duplicate_check_list = []
+        duplicate_check_list = [main_file_path]
 
         for document in llm_response["context"][1:]:
             sub_file_path = document.metadata["source"]
 
-            if sub_file_path == main_file_path:
-                continue
-            
             if sub_file_path in duplicate_check_list:
                 continue
 
             duplicate_check_list.append(sub_file_path)
-            
-            if "page" in document.metadata:
-                sub_page_number = document.metadata["page"]
-                sub_choice = {"source": sub_file_path, "page_number": sub_page_number}
-            else:
-                sub_choice = {"source": sub_file_path}
-            
-            sub_choices.append(sub_choice)
+            sub_choices.append({
+                "source": sub_file_path,
+                "content": document.page_content
+            })
         
         if sub_choices:
             sub_message = "その他、ファイルありかの候補を提示します。"
@@ -146,28 +144,28 @@ def display_search_llm_response(llm_response):
 
             for sub_choice in sub_choices:
                 icon = utils.get_source_icon(sub_choice['source'])
-                if "page_number" in sub_choice:
-                    st.info(f"{sub_choice['source']}（ページNo.{sub_choice['page_number']+1}）", icon=icon)
-                else:
-                    st.info(f"{sub_choice['source']}", icon=icon)
+                st.info(f"📌 **保存場所:** `{sub_choice['source']}`", icon=icon)
+                with st.expander(f"📄 {sub_choice['source']} の内容を確認"):
+                    st.markdown(sub_choice["content"])
         
-        content = {}
-        content["mode"] = ct.ANSWER_MODE_1
-        content["answer"] = llm_response["answer"]
-        content["main_message"] = main_message
-        content["main_file_path"] = main_file_path
-        if "page" in llm_response["context"][0].metadata:
-            content["main_page_number"] = main_page_number
+        content = {
+            "mode": ct.ANSWER_MODE_1,
+            "answer": llm_response["answer"],
+            "main_message": main_message,
+            "main_file_path": main_file_path,
+            "main_content": main_file_content
+        }
         if sub_choices:
             content["sub_message"] = sub_message
             content["sub_choices"] = sub_choices
     else:
         st.markdown(ct.NO_DOC_MATCH_MESSAGE)
 
-        content = {}
-        content["mode"] = ct.ANSWER_MODE_1
-        content["answer"] = ct.NO_DOC_MATCH_MESSAGE
-        content["no_file_path_flg"] = True
+        content = {
+            "mode": ct.ANSWER_MODE_1,
+            "answer": ct.NO_DOC_MATCH_MESSAGE,
+            "no_file_path_flg": True
+        }
     
     return content
 
@@ -181,7 +179,7 @@ def display_contact_llm_response(llm_response):
     if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER:
         st.divider()
 
-        message = "情報源"
+        message = "情報源（参照データ）"
         st.markdown(f"##### {message}")
 
         file_path_list = []
@@ -192,21 +190,22 @@ def display_contact_llm_response(llm_response):
             if file_path in file_path_list:
                 continue
 
-            if "page" in document.metadata:
-                page_number = document.metadata["page"]
-                file_info = f"{file_path}（ページNo.{page_number+1}）"
-            else:
-                file_info = f"{file_path}"
-
-            icon = utils.get_source_icon(file_path)
-            st.info(file_info, icon=icon)
-
             file_path_list.append(file_path)
-            file_info_list.append(file_info)
+            icon = utils.get_source_icon(file_path)
+            
+            st.info(f"📌 **保存場所:** `{file_path}`", icon=icon)
+            with st.expander("📄 参照したデータ内容を表示"):
+                st.markdown(document.page_content)
 
-    content = {}
-    content["mode"] = ct.ANSWER_MODE_2
-    content["answer"] = llm_response["answer"]
+            file_info_list.append({
+                "path": file_path,
+                "content": document.page_content
+            })
+
+    content = {
+        "mode": ct.ANSWER_MODE_2,
+        "answer": llm_response["answer"]
+    }
     if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER:
         content["message"] = message
         content["file_info_list"] = file_info_list

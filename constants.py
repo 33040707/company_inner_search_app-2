@@ -3,7 +3,7 @@
 """
 
 import os
-from langchain_community.document_loaders import PDFPlumberLoader, Docx2txtLoader, TextLoader
+from langchain_community.document_loaders import Docx2txtLoader, TextLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
 
 # ==========================================
@@ -41,10 +41,11 @@ TOP_K = 5
 # ==========================================
 RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
 SUPPORTED_EXTENSIONS = {
-    ".pdf": PDFPlumberLoader,
+    ".txt": lambda path: TextLoader(path, encoding="utf-8"),
     ".docx": Docx2txtLoader,
     ".csv": lambda path: CSVLoader(path, encoding="utf-8"),
-    ".txt": lambda path: TextLoader(path, encoding="utf-8")
+    # PDFはconvert_docs.pyでテキスト化した.txtを参照するため、直接ロードから除外
+    # ".pdf": PDFPlumberLoader,
 }
 CSV_INTEGRATION_TARGETS = [
     "社員名簿.csv"

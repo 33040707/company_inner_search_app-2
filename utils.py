@@ -26,7 +26,7 @@ def build_error_message(message):
 
 
 def get_llm_response(chat_message):
-    """LLMからの回答取得"""
+    """LLMからの回答取得（バージョン依存をなくした直接記述版）"""
     llm = ChatOpenAI(model_name=ct.MODEL, temperature=ct.TEMPERATURE)
 
     # ==========================================
@@ -38,12 +38,14 @@ def get_llm_response(chat_message):
             MessagesPlaceholder("chat_history"),
             ("human", "{input}")
         ])
+        # 履歴がある場合はLLMに文脈を理解させた独立クエリを作らせる
         search_query_msg = (question_generator_prompt | llm).invoke({
             "input": chat_message,
             "chat_history": st.session_state.chat_history
         })
         search_query = search_query_msg.content
     else:
+        # 履歴がなければ入力値をそのまま検索クエリとする
         search_query = chat_message
 
     # ==========================================
@@ -51,13 +53,14 @@ def get_llm_response(chat_message):
     # ==========================================
     docs = st.session_state.retriever.invoke(search_query)
     
-    # 検索したドキュメント群のテキスト（PDF等）を結合
+    # 検索したドキュメント群のテキストを結合（PDF等の本文）
     context_text = "\n\n".join([doc.page_content for doc in docs])
 
     # ==========================================
     # 3. モードに応じた回答の生成
     # ==========================================
     if st.session_state.mode == ct.ANSWER_MODE_1:
+        # 【社内文書検索】最初の構成そのまま
         question_answer_template = ct.SYSTEM_PROMPT_DOC_SEARCH
         question_answer_prompt = ChatPromptTemplate.from_messages([
             ("system", question_answer_template),
@@ -65,7 +68,7 @@ def get_llm_response(chat_message):
             ("human", "{input}")
         ])
     else:
-        # 社内問い合わせ用：PDFから取得したcontextを人間の入力欄（human）に明示的に挿入
+        # 【社内問い合わせ】PDFから読み取った context を確実に参照させるため human 側に渡す
         question_answer_template = ct.SYSTEM_PROMPT_INQUIRY
         question_answer_prompt = ChatPromptTemplate.from_messages([
             ("system", question_answer_template),
@@ -86,7 +89,7 @@ def get_llm_response(chat_message):
         "context": docs
     }
 
-    # LLMレスポンスを会話履歴に追加
+    # LLMレスポンスを会話履歴に追加（次回以降の文脈考慮のため）
     st.session_state.chat_history.extend([
         HumanMessage(content=chat_message), 
         AIMessage(content=answer_msg.content)

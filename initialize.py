@@ -1,5 +1,5 @@
 """
-初期化処理モジュール（データソース読み込み最適化版）
+初期化処理モジュール（MMR検索アルゴリズム採用版）
 """
 
 import os
@@ -83,18 +83,21 @@ def initialize_retriever():
 
     logger.info(f"--- RAGデータ読み込み診断 ---")
     logger.info(f"読み込み成功ドキュメント分割数: {len(splitted_docs)}")
-    for i, doc in enumerate(splitted_docs[:5]):
-        logger.info(f"Doc {i+1} [{doc.metadata.get('source')}]: {len(doc.page_content)}文字 -> {doc.page_content[:50]}...")
 
     if not splitted_docs:
-        logger.warning("⚠️ 有効なドキュメントテキストが取得できていません。dataフォルダ内のファイルを確認してください。")
+        logger.warning("⚠️ 有効なドキュメントテキストが取得できていません。")
         splitted_docs = [Document(page_content="社内情報データが見つかりませんでした。", metadata={"source": "system"})]
 
     db = Chroma.from_documents(
         documents=splitted_docs,
         embedding=embeddings
     )
-    st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
+    
+    # MMR (Maximal Marginal Relevance) 検索を採用して多様な文脈・キーワードを捕捉
+    st.session_state.retriever = db.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": ct.TOP_K, "fetch_k": 20}
+    )
 
 def load_data_sources():
     """各種データソースからのドキュメント読込"""
@@ -126,11 +129,11 @@ def file_load(path, docs_all, integrated_docs_all):
     file_name = os.path.basename(path)
     base_name = os.path.splitext(path)[0]
 
-    # 【重要】同名の.txtが存在する場合、元のPDF/DOCX/XLSXの直接読み込みはスキップ（重い・文字崩れを防ぐため）
+    # 同名の.txtが存在する場合、元のPDF/DOCX/XLSXの直接読み込みはスキップ（高精度テキストを優先）
     if file_extension in [".pdf", ".docx", ".xlsx"]:
         txt_counterpart = f"{base_name}.txt"
         if os.path.exists(txt_counterpart):
-            logger.info(f"⏭️ スキップ: {file_name}（高精度テキスト化済みの {os.path.basename(txt_counterpart)} を優先して読み込みます）")
+            logger.info(f"スキップ: {file_name}（高精度テキスト化済みの {os.path.basename(txt_counterpart)} を優先読み込み）")
             return
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:

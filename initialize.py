@@ -143,11 +143,10 @@ def file_load(path, docs_all, integrated_docs_all):
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
 
 def adjust_string(s):
-    """Windows環境でRAGが正常動作するよう調整"""
-    if type(s) is not str:
+    """
+    文字列の正規化処理
+    ※cp932エンコードによる文字化け・情報欠損を防ぐためUnicode正規化のみ実行
+    """
+    if not isinstance(s, str):
         return s
-    if sys.platform.startswith("win"):
-        s = unicodedata.normalize('NFC', s)
-        s = s.encode("cp932", "ignore").decode("cp932")
-        return s
-    return s
+    return unicodedata.normalize('NFC', s)

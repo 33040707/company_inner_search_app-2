@@ -3,7 +3,7 @@
 """
 
 import os
-from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, TextLoader
+from langchain_community.document_loaders import PDFPlumberLoader, Docx2txtLoader, TextLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
 
 # ==========================================
@@ -30,9 +30,8 @@ APP_BOOT_MESSAGE = "アプリが起動されました。"
 # ==========================================
 # LLM設定系
 # ==========================================
-MODEL = "gpt-5-mini"
+MODEL = "gpt-4o-mini"
 TEMPERATURE = 0.5
-# 👇 安定動作していた元のサイズに戻しました
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 TOP_K = 5
@@ -42,7 +41,7 @@ TOP_K = 5
 # ==========================================
 RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
 SUPPORTED_EXTENSIONS = {
-    ".pdf": PyMuPDFLoader,
+    ".pdf": PDFPlumberLoader,  # 文字化け防止・構造抽出の精度向上のため PDFPlumberLoader を使用
     ".docx": Docx2txtLoader,
     ".csv": lambda path: CSVLoader(path, encoding="utf-8"),
     ".txt": lambda path: TextLoader(path, encoding="utf-8")

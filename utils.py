@@ -29,7 +29,7 @@ def build_error_message(message):
 
 
 def get_llm_response(chat_message):
-    """LLMからの回答取得（文脈埋め込みの正常化版）"""
+    """LLMからの回答取得（安定版）"""
     llm = ChatOpenAI(model_name=ct.MODEL, temperature=ct.TEMPERATURE)
 
     # ==========================================
@@ -65,7 +65,6 @@ def get_llm_response(chat_message):
     else:
         question_answer_template = ct.SYSTEM_PROMPT_INQUIRY
 
-    # システムプロンプト内に文脈({context})を動的に挿入してChatPromptTemplateを作成
     question_answer_prompt = ChatPromptTemplate.from_messages([
         ("system", question_answer_template),
         MessagesPlaceholder("chat_history"),

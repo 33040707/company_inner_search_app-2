@@ -79,13 +79,17 @@ def initialize_retriever():
     splitted_docs = text_splitter.split_documents(docs_all)
     splitted_docs.extend(integrated_docs_all)
 
+    # 読み込み結果をログに出力（デバッグ用）
+    logger = logging.getLogger(ct.LOGGER_NAME)
+    logger.info(f"読み込まれたドキュメント分割数: {len(splitted_docs)}")
+
     if not splitted_docs:
         splitted_docs = [Document(page_content="社内情報データが見つかりませんでした。", metadata={"source": "system"})]
 
+    # オンメモリで常に最新データをインデックス構築（古いキャッシュによる検索漏れを防止）
     db = Chroma.from_documents(
         documents=splitted_docs,
-        embedding=embeddings,
-        persist_directory=ct.CHROMA_PERSIST_DIR
+        embedding=embeddings
     )
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 

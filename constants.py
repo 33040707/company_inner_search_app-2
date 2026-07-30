@@ -35,7 +35,6 @@ TEMPERATURE = 0.3
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 TOP_K = 5
-CHROMA_PERSIST_DIR = os.path.join(os.getcwd(), ".chroma")
 
 # ==========================================
 # データソース系

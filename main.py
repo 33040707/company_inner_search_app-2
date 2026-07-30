@@ -1,5 +1,5 @@
 """
-このファイルは、Webアプリのメイン処理が記述されたファイルです。
+メインアプリケーションスクリプト
 """
 
 import logging
@@ -9,10 +9,7 @@ from initialize import initialize
 import components as cn
 import constants as ct
 
-st.set_page_config(
-    page_title=ct.APP_NAME
-)
-
+st.set_page_config(page_title=ct.APP_NAME)
 logger = logging.getLogger(ct.LOGGER_NAME)
 
 try:
@@ -22,7 +19,7 @@ except Exception as e:
     st.error(utils.build_error_message(ct.INITIALIZE_ERROR_MESSAGE), icon=ct.ERROR_ICON)
     st.stop()
 
-if not "initialized" in st.session_state:
+if "initialized" not in st.session_state:
     st.session_state.initialized = True
     logger.info(ct.APP_BOOT_MESSAGE)
 
@@ -45,7 +42,6 @@ if chat_message:
     with st.chat_message("user"):
         st.markdown(chat_message)
 
-    res_box = st.empty()
     with st.spinner(ct.SPINNER_TEXT):
         try:
             llm_response = utils.get_llm_response(chat_message)
@@ -58,7 +54,7 @@ if chat_message:
         try:
             if st.session_state.mode == ct.ANSWER_MODE_1:
                 content = cn.display_search_llm_response(llm_response)
-            elif st.session_state.mode == ct.ANSWER_MODE_2:
+            else:
                 content = cn.display_contact_llm_response(llm_response)
             
             logger.info({"message": content, "application_mode": st.session_state.mode})

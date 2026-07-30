@@ -2,7 +2,7 @@
 ロジック処理関数定義ファイル
 """
 
-import Streamlit as st
+import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI

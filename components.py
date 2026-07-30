@@ -6,7 +6,6 @@ import streamlit as st
 import utils
 import constants as ct
 
-
 def display_app_title():
     """タイトル表示"""
     st.markdown(f"## {ct.APP_NAME}")
@@ -20,7 +19,7 @@ def display_sidebar():
         col1, col2 = st.columns([100, 1])
         with col1:
             st.session_state.mode = st.radio(
-                label="利用目的の選択",
+                label="利用目的",
                 options=[ct.ANSWER_MODE_1, ct.ANSWER_MODE_2],
                 label_visibility="collapsed"
             )
@@ -82,12 +81,14 @@ def display_conversation_log():
 
 
 def display_search_llm_response(llm_response):
-    """【変更なし】社内文書検索モードにおけるLLMレスポンスを表示"""
+    """【完全に元のコードへ復元】「社内文書検索」モードにおけるLLMレスポンスを表示"""
     if llm_response["context"] and llm_response["answer"] != ct.NO_DOC_MATCH_ANSWER:
+
         if llm_response["answer"]:
             st.markdown(llm_response["answer"])
 
         main_file_path = llm_response["context"][0].metadata["source"]
+
         main_message = "入力内容に関する情報は、以下のファイルに含まれている可能性があります。"
         st.markdown(main_message)
         
@@ -154,20 +155,20 @@ def display_search_llm_response(llm_response):
 
 
 def display_contact_llm_response(llm_response):
-    """【修正箇所】「社内問い合わせ」モードにおけるLLMレスポンス（PDF本文からの生成回答）を表示"""
-    # LLMが作成した回答（PDFの内容）を画面に表示
+    """「社内問い合わせ」モードにおけるLLMレスポンスを表示"""
     st.markdown(llm_response["answer"])
 
-    # 該当情報が存在した場合のみ、参照元の情報源（PDFファイル名等）を下に表示
-    file_info_list = []
-    message = "情報源"
-    if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER and llm_response["context"]:
+    if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER:
         st.divider()
+
+        message = "情報源"
         st.markdown(f"##### {message}")
 
         file_path_list = []
+        file_info_list = []
+
         for document in llm_response["context"]:
-            file_path = document.metadata.get("source", "不明なファイル")
+            file_path = document.metadata["source"]
             if file_path in file_path_list:
                 continue
 
@@ -186,7 +187,7 @@ def display_contact_llm_response(llm_response):
     content = {}
     content["mode"] = ct.ANSWER_MODE_2
     content["answer"] = llm_response["answer"]
-    if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER and file_info_list:
+    if llm_response["answer"] != ct.INQUIRY_NO_MATCH_ANSWER:
         content["message"] = message
         content["file_info_list"] = file_info_list
 

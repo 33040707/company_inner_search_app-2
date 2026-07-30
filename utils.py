@@ -37,14 +37,12 @@ def get_llm_response(chat_message):
             MessagesPlaceholder("chat_history"),
             ("human", "{input}")
         ])
-        # 履歴がある場合はLLMに文脈を理解させた独立クエリを作らせる
         search_query_msg = (question_generator_prompt | llm).invoke({
             "input": chat_message,
             "chat_history": st.session_state.chat_history
         })
         search_query = search_query_msg.content
     else:
-        # 履歴がなければ入力値をそのまま検索クエリとする
         search_query = chat_message
 
     # ==========================================
@@ -52,7 +50,7 @@ def get_llm_response(chat_message):
     # ==========================================
     docs = st.session_state.retriever.invoke(search_query)
     
-    # 検索したドキュメント群のテキストを結合
+    # 検索したドキュメント群のテキストを結合（PDFの本文テキスト）
     context_text = "\n\n".join([doc.page_content for doc in docs])
 
     # ==========================================
@@ -66,10 +64,10 @@ def get_llm_response(chat_message):
     question_answer_prompt = ChatPromptTemplate.from_messages([
         ("system", question_answer_template),
         MessagesPlaceholder("chat_history"),
-        ("human", "{input}")
+        ("human", "{input}\n\n【参照ドキュメント】\n{context}")
     ])
 
-    # LLMから最終的な回答を取得
+    # LLMから最終的な回答を取得（{context} を確実に注入）
     answer_msg = (question_answer_prompt | llm).invoke({
         "context": context_text,
         "input": chat_message,
@@ -82,7 +80,7 @@ def get_llm_response(chat_message):
         "context": docs
     }
 
-    # LLMレスポンスを会話履歴に追加（次回以降の文脈考慮のため）
+    # LLMレスポンスを会話履歴に追加
     st.session_state.chat_history.extend([
         HumanMessage(content=chat_message), 
         AIMessage(content=answer_msg.content)

@@ -5,8 +5,12 @@
 import os
 import logging
 import streamlit as st
+from dotenv import load_dotenv
 
-# Streamlit SecretsからAPIキーを環境変数に反映
+# .env があれば読み込む（ローカル実行時の環境変数設定用）
+load_dotenv()
+
+# Streamlit SecretsからAPIキーを環境変数に反映（優先）
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 

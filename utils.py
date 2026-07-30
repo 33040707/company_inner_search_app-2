@@ -3,6 +3,7 @@
 """
 
 import os
+import logging
 import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
@@ -12,6 +13,10 @@ import constants as ct
 # Streamlit CloudのSecretsからAPIキーを設定
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+
+# 実行時に API キーが設定されているかチェック
+if not os.getenv("OPENAI_API_KEY"):
+    logging.getLogger(ct.LOGGER_NAME).warning("OPENAI_API_KEY is not set in environment. LLM calls will fail.")
 
 def get_source_icon(source):
     """メッセージと一緒に表示するアイコンの種類を取得"""
@@ -52,7 +57,28 @@ def get_llm_response(chat_message):
     # ==========================================
     # 2. ドキュメントの検索
     # ==========================================
-    docs = st.session_state.retriever.invoke(search_query)
+    # Retriever の呼び出しは実装によりメソッド名が異なるため柔軟に対応
+    retriever = st.session_state.get("retriever")
+    docs = []
+    try:
+        if retriever is None:
+            logging.getLogger(ct.LOGGER_NAME).warning("retriever is not initialized in session_state")
+            docs = []
+        elif hasattr(retriever, "get_relevant_documents"):
+            docs = retriever.get_relevant_documents(search_query)
+        elif hasattr(retriever, "retrieve"):
+            docs = retriever.retrieve(search_query)
+        elif callable(getattr(retriever, "invoke", None)):
+            docs = retriever.invoke(search_query)
+        else:
+            # 最後の手段として呼び出し可能オブジェクトとして試す
+            try:
+                docs = retriever(search_query)
+            except Exception:
+                docs = []
+    except Exception as e:
+        logging.getLogger(ct.LOGGER_NAME).warning(f"Retriever call failed: {e}")
+        docs = []
     
     # 検索したドキュメント群のテキストを結合
     context_text = "\n\n".join([doc.page_content for doc in docs])

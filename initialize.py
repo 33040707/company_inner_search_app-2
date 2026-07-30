@@ -1,14 +1,18 @@
 """
-初期化処理モジュール（MMR検索アルゴリズム採用版）
+初期化処理モジュール（PDF自動GPT-4o Vision変換・全自動対応版）
 """
 
 import os
+import glob
+import base64
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from uuid import uuid4
 import sys
 import unicodedata
 import streamlit as st
+import fitz  # PyMuPDF
+import openai
 
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
@@ -57,6 +61,57 @@ def initialize_session_state():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
+def auto_convert_pdf_if_needed(file_path):
+    """PDFが存在し、まだ.txt化されていない場合はGPT-4o Visionで自動変換する"""
+    logger = logging.getLogger(ct.LOGGER_NAME)
+    base_name = os.path.splitext(file_path)[0]
+    txt_path = f"{base_name}.txt"
+
+    if os.path.exists(txt_path):
+        return txt_path
+
+    logger.info(f"🔄 未変換のPDFを検出しました。GPT-4o Visionで自動テキスト化を開始します: {os.path.basename(file_path)}")
+    try:
+        client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
+        doc = fitz.open(file_path)
+        full_text = f"--- 参照元ファイル: {os.path.basename(file_path)} ---\n\n"
+        
+        for page_num, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=300)
+            img_bytes = pix.tobytes("jpeg")
+            base64_image = base64.b64encode(img_bytes).decode('utf-8')
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "この画像は社内資料・価格表・仕様書などです。表構造や数値を正確にマークダウン形式で書き起こしてください。"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=3000,
+                temperature=0.0,
+            )
+            full_text += f"### ページNo.{page_num + 1}\n\n" + response.choices[0].message.content + "\n\n"
+
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        
+        logger.info(f"✅ 自動テキスト変換完了: {txt_path}")
+        return txt_path
+    except Exception as e:
+        logger.error(f"❌ PDFの自動GPT-4o変換処理でエラーが発生しました ({file_path}): {e}")
+        return None
+
 def initialize_retriever():
     """Chroma VectorStoreおよびRetrieverの初期化"""
     logger = logging.getLogger(ct.LOGGER_NAME)
@@ -93,7 +148,6 @@ def initialize_retriever():
         embedding=embeddings
     )
     
-    # MMR (Maximal Marginal Relevance) 検索を採用して多様な文脈・キーワードを捕捉
     st.session_state.retriever = db.as_retriever(
         search_type="mmr",
         search_kwargs={"k": ct.TOP_K, "fetch_k": 20}
@@ -127,14 +181,14 @@ def file_load(path, docs_all, integrated_docs_all):
     logger = logging.getLogger(ct.LOGGER_NAME)
     file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
-    base_name = os.path.splitext(path)[0]
 
-    # 同名の.txtが存在する場合、元のPDF/DOCX/XLSXの直接読み込みはスキップ（高精度テキストを優先）
-    if file_extension in [".pdf", ".docx", ".xlsx"]:
-        txt_counterpart = f"{base_name}.txt"
-        if os.path.exists(txt_counterpart):
-            logger.info(f"スキップ: {file_name}（高精度テキスト化済みの {os.path.basename(txt_counterpart)} を優先読み込み）")
-            return
+    # PDFファイルが見つかった場合、自動的にGPT-4oで高精度テキスト(.txt)に変換する
+    if file_extension == ".pdf":
+        txt_path = auto_convert_pdf_if_needed(path)
+        if txt_path and os.path.exists(txt_path):
+            path = txt_path
+            file_extension = ".txt"
+            file_name = os.path.basename(txt_path)
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:
         try:

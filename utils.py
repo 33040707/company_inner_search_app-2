@@ -29,7 +29,7 @@ def build_error_message(message):
 
 
 def get_llm_response(chat_message):
-    """LLMからの回答取得（安定版）"""
+    """LLMからの回答取得"""
     llm = ChatOpenAI(model_name=ct.MODEL, temperature=ct.TEMPERATURE)
 
     # ==========================================

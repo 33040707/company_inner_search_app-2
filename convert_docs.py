@@ -17,7 +17,7 @@ DATA_FOLDER = "data"
 def process_pdf(file_path):
     """PDFを画像化し、GPT-4o Visionで読み取る"""
     doc = fitz.open(file_path)
-    full_text = ""
+    full_text = f"--- 参照元ファイル: {os.path.basename(file_path)} ---\n\n"
     for page_num, page in enumerate(doc):
         print(f"   ... ページ {page_num + 1}/{len(doc)} をAIで読み取り中 ...")
         # 高画質(dpi=400)で画像化
@@ -32,7 +32,7 @@ def process_pdf(file_path):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "この画像は建設・設計などの業務に関する価格表や仕様書などの社内資料です。表の構造や数値を正確にマークダウン形式で書き起こしてください。"},
+                        {"type": "text", "text": "この画像は建設・設計などの業務に関する価格表や仕様書などの社内資料です。表の構造や数値を正確にマークダウン形式で書き起こしてください。見出しや項目名も漏らさず記載してください。"},
                         {
                             "type": "image_url",
                             "image_url": {
@@ -46,14 +46,14 @@ def process_pdf(file_path):
             max_tokens=3000,
             temperature=0.0,
         )
-        full_text += response.choices[0].message.content + "\n\n"
+        full_text += f"### ページNo.{page_num + 1}\n\n" + response.choices[0].message.content + "\n\n"
     return full_text
 
 
 def process_docx(file_path):
     """Wordファイルからテキストと表データを抽出する"""
     doc = Document(file_path)
-    full_text = ""
+    full_text = f"--- 参照元ファイル: {os.path.basename(file_path)} ---\n\n"
     
     # 段落（通常の文章）の抽出
     for para in doc.paragraphs:
@@ -75,7 +75,7 @@ def process_docx(file_path):
 def process_xlsx(file_path):
     """Excelファイルから全シートのデータを抽出する"""
     xls = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
-    full_text = ""
+    full_text = f"--- 参照元ファイル: {os.path.basename(file_path)} ---\n\n"
     
     for sheet_name, df in xls.items():
         full_text += f"## シート名: {sheet_name}\n\n"

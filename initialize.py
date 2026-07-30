@@ -11,7 +11,7 @@ import unicodedata
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
@@ -71,10 +71,12 @@ def initialize_retriever():
             doc.metadata[key] = adjust_string(doc.metadata[key])
     
     embeddings = OpenAIEmbeddings()
-    text_splitter = CharacterTextSplitter(
+
+    # 単価表などの連続した文脈・表構造を保つため RecursiveCharacterTextSplitter を採用
+    text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=ct.CHUNK_SIZE,
         chunk_overlap=ct.CHUNK_OVERLAP,
-        separator="\n"
+        separators=["\n\n", "\n", " ", ""]
     )
 
     splitted_docs = text_splitter.split_documents(docs_all)
@@ -83,6 +85,7 @@ def initialize_retriever():
     if not splitted_docs:
         splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
 
+    # ベクトルDB構築 (検索件数 TOP_K を指定)
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
@@ -149,7 +152,6 @@ def file_load(path, docs_all, integrated_docs_all):
 def adjust_string(s):
     """
     文字列の正規化処理
-    ※cp932エンコードによる文字化け・情報欠損を防ぐためUnicode正規化のみ実行
     """
     if not isinstance(s, str):
         return s

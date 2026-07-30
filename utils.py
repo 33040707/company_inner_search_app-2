@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
 import constants as ct
 
-# Streamlit CloudなどのSecretsからAPIキーを取得して環境変数に適用
+# Streamlit CloudのSecretsからAPIキーを設定
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 
@@ -29,7 +29,7 @@ def build_error_message(message):
 
 
 def get_llm_response(chat_message):
-    """LLMからの回答取得（バージョン依存をなくした直接記述版）"""
+    """LLMからの回答取得（文脈埋め込みの正常化版）"""
     llm = ChatOpenAI(model_name=ct.MODEL, temperature=ct.TEMPERATURE)
 
     # ==========================================
@@ -41,14 +41,12 @@ def get_llm_response(chat_message):
             MessagesPlaceholder("chat_history"),
             ("human", "{input}")
         ])
-        # 履歴がある場合はLLMに文脈を理解させた独立クエリを作らせる
         search_query_msg = (question_generator_prompt | llm).invoke({
             "input": chat_message,
             "chat_history": st.session_state.chat_history
         })
         search_query = search_query_msg.content
     else:
-        # 履歴がなければ入力値をそのまま検索クエリとする
         search_query = chat_message
 
     # ==========================================
@@ -67,6 +65,7 @@ def get_llm_response(chat_message):
     else:
         question_answer_template = ct.SYSTEM_PROMPT_INQUIRY
 
+    # システムプロンプト内に文脈({context})を動的に挿入してChatPromptTemplateを作成
     question_answer_prompt = ChatPromptTemplate.from_messages([
         ("system", question_answer_template),
         MessagesPlaceholder("chat_history"),
@@ -86,7 +85,7 @@ def get_llm_response(chat_message):
         "context": docs
     }
 
-    # LLMレスポンスを会話履歴に追加（次回以降の文脈考慮のため）
+    # LLMレスポンスを会話履歴に追加
     st.session_state.chat_history.extend([
         HumanMessage(content=chat_message), 
         AIMessage(content=answer_msg.content)

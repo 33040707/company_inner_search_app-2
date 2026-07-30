@@ -13,3 +13,10 @@ tiktoken
 pydantic>=2.0.0
 pdfplumber
 pypdfium2
+openai
+langchain
+langchain-openai
+langchain-community
+pymupdf
+python-docx
+openpyxl

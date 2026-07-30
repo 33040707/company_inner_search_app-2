@@ -11,18 +11,13 @@ import unicodedata
 import streamlit as st
 from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
-
-# 👇 修正箇所: 最新バージョンに合わせて「langchain_text_splitters」からインポートするように変更しました
 from langchain_text_splitters import CharacterTextSplitter
-
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 import constants as ct
 
-
 def initialize():
     """画面読み込み時に実行する初期化処理"""
-    # フォルダの自動作成（デプロイ先のエラー防止）
     os.makedirs(ct.RAG_TOP_FOLDER_PATH, exist_ok=True)
     os.makedirs(ct.LOG_DIR_PATH, exist_ok=True)
     
@@ -30,7 +25,6 @@ def initialize():
     initialize_session_id()
     initialize_logger()
     initialize_retriever()
-
 
 def initialize_logger():
     """ログ出力の設定"""
@@ -50,12 +44,10 @@ def initialize_logger():
     logger.setLevel(logging.INFO)
     logger.addHandler(log_handler)
 
-
 def initialize_session_id():
     """セッションIDの作成"""
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid4().hex
-
 
 def initialize_retriever():
     """画面読み込み時にRAGのRetrieverを作成"""
@@ -84,20 +76,17 @@ def initialize_retriever():
     splitted_docs = text_splitter.split_documents(docs_all)
     splitted_docs.extend(integrated_docs_all)
 
-    # 読み込めるデータが1件もない場合のダミーデータ作成（エラー回避用）
     if not splitted_docs:
         splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
 
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
-
 def initialize_session_state():
     """初期化データの用意"""
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.chat_history = []
-
 
 def load_data_sources():
     """RAGの参照先となるデータソースの読み込み"""
@@ -119,7 +108,6 @@ def load_data_sources():
     docs_all.extend(web_docs_all)
     return docs_all, integrated_docs_all
 
-
 def recursive_file_check(path, docs_all, integrated_docs_all):
     """ファイル再帰チェック"""
     if os.path.isdir(path):
@@ -130,10 +118,9 @@ def recursive_file_check(path, docs_all, integrated_docs_all):
     else:
         file_load(path, docs_all, integrated_docs_all)
 
-
 def file_load(path, docs_all, integrated_docs_all):
     """ファイル内のデータ読み込み"""
-    file_extension = os.path.splitext(path)[1]
+    file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:
@@ -143,18 +130,17 @@ def file_load(path, docs_all, integrated_docs_all):
             if not file_name in ct.CSV_INTEGRATION_TARGETS:
                 docs_all.extend(docs)
             else:
-                doc = ""
+                doc_content = ""
                 for row in docs:
                     page_content = row.page_content
                     value_list = page_content.split("\n")
                     row_data = "\n".join(value_list)
-                    doc += row_data + "\n=================================\n"
+                    doc_content += row_data + "\n=================================\n"
                 
-                new_doc = Document(page_content=doc, metadata={"source": path})
+                new_doc = Document(page_content=doc_content, metadata={"source": path})
                 integrated_docs_all.append(new_doc)
         except Exception as e:
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
-
 
 def adjust_string(s):
     """Windows環境でRAGが正常動作するよう調整"""

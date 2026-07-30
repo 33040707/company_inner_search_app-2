@@ -1,5 +1,5 @@
 """
-初期化処理モジュール（PDF・TXT読み込みログ強化版）
+初期化処理モジュール（データソース読み込み最適化版）
 """
 
 import os
@@ -81,13 +81,12 @@ def initialize_retriever():
     splitted_docs = text_splitter.split_documents(docs_all)
     splitted_docs.extend(integrated_docs_all)
 
-    # 読み込んだドキュメント数と各文字数をログに出力
     logger.info(f"--- RAGデータ読み込み診断 ---")
     logger.info(f"読み込み成功ドキュメント分割数: {len(splitted_docs)}")
-    for i, doc in enumerate(splitted_docs[:5]): # 先頭5件を表示
+    for i, doc in enumerate(splitted_docs[:5]):
         logger.info(f"Doc {i+1} [{doc.metadata.get('source')}]: {len(doc.page_content)}文字 -> {doc.page_content[:50]}...")
 
-    if not splitted_docs or (len(splitted_docs) == 1 and "見つかりませんでした" in splitted_docs[0].page_content):
+    if not splitted_docs:
         logger.warning("⚠️ 有効なドキュメントテキストが取得できていません。dataフォルダ内のファイルを確認してください。")
         splitted_docs = [Document(page_content="社内情報データが見つかりませんでした。", metadata={"source": "system"})]
 
@@ -125,6 +124,14 @@ def file_load(path, docs_all, integrated_docs_all):
     logger = logging.getLogger(ct.LOGGER_NAME)
     file_extension = os.path.splitext(path)[1].lower()
     file_name = os.path.basename(path)
+    base_name = os.path.splitext(path)[0]
+
+    # 【重要】同名の.txtが存在する場合、元のPDF/DOCX/XLSXの直接読み込みはスキップ（重い・文字崩れを防ぐため）
+    if file_extension in [".pdf", ".docx", ".xlsx"]:
+        txt_counterpart = f"{base_name}.txt"
+        if os.path.exists(txt_counterpart):
+            logger.info(f"⏭️ スキップ: {file_name}（高精度テキスト化済みの {os.path.basename(txt_counterpart)} を優先して読み込みます）")
+            return
 
     if file_extension in ct.SUPPORTED_EXTENSIONS:
         try:
@@ -132,7 +139,6 @@ def file_load(path, docs_all, integrated_docs_all):
             loader = loader_func(path)
             docs = loader.load()
 
-            # テキストが空でないかチェック
             total_chars = sum(len(d.page_content.strip()) for d in docs)
             logger.info(f"ファイル読み込み成功: {file_name} (抽出文字数: {total_chars}文字)")
 

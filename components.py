@@ -35,7 +35,7 @@ def display_sidebar():
         with col1:
             # 「label_visibility="collapsed"」とすることで、ラジオボタンを非表示にする
             st.session_state.mode = st.radio(
-                label="",
+                label="モード選択",  # 空文字エラーを回避するためラベル名を設定
                 options=[ct.ANSWER_MODE_1, ct.ANSWER_MODE_2],
                 label_visibility="collapsed"
             )

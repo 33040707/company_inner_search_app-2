@@ -1,8 +1,8 @@
 """
 このファイルは、固定の文字列や数値などのデータを変数として一括管理するファイルです。
 """
-
 import os
+
 from langchain_community.document_loaders import PDFPlumberLoader, Docx2txtLoader, TextLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
 
@@ -32,16 +32,16 @@ APP_BOOT_MESSAGE = "アプリが起動されました。"
 # ==========================================
 MODEL = "gpt-4o-mini"
 TEMPERATURE = 0.0
-CHUNK_SIZE = 500      # 安定版の数値
-CHUNK_OVERLAP = 50    # 安定版の数値
-TOP_K = 5             # 安定版の数値
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 100
+TOP_K = 10
 
 # ==========================================
 # RAG参照用のデータソース系
 # ==========================================
 RAG_TOP_FOLDER_PATH = os.path.join(os.getcwd(), "data")
 SUPPORTED_EXTENSIONS = {
-    ".pdf": PDFPlumberLoader,  # 日本語文字化け対策版
+    ".pdf": PDFPlumberLoader,  # 日本語に強いPDFローダー
     ".docx": Docx2txtLoader,
     ".csv": lambda path: CSVLoader(path, encoding="utf-8"),
     ".txt": lambda path: TextLoader(path, encoding="utf-8")
@@ -77,7 +77,7 @@ SYSTEM_PROMPT_INQUIRY = """
 
     【条件】
     1. 「回答に必要な情報が見つかりませんでした」という拒絶フレーズは絶対に使用しないでください。
-    2. 「データベースからは以下の関連情報が見つかりました：」と前置きし、以下の【文脈】の内容（テキストやMarkdownの表）を整理して回答してください。
+    2. 「データベースからは以下の関連情報が見つかりました：」と前置きし、以下の【文脈】の内容（テキストやMarkdownの表）をそのまま整理して必ず画面に出力してください。
     3. 文脈の内容が質問の完璧な答えになっていなくても、検索でヒットした情報をとにかく提示することがあなたの任務です。
     4. 回答の最後には、必ず以下の【文脈】の生のテキストを一言一句変えずに、「【参照元テキスト】」という見出しをつけてそのまま出力してください。
 

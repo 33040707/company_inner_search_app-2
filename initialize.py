@@ -72,7 +72,7 @@ def initialize_retriever():
     
     embeddings = OpenAIEmbeddings()
 
-    # 単価表などの連続した文脈・表構造を保つため RecursiveCharacterTextSplitter を採用
+    # 単価表等の構造崩れを防ぐため RecursiveCharacterTextSplitter を採用
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=ct.CHUNK_SIZE,
         chunk_overlap=ct.CHUNK_OVERLAP,
@@ -85,7 +85,6 @@ def initialize_retriever():
     if not splitted_docs:
         splitted_docs = [Document(page_content="初期データなし", metadata={"source": "dummy"})]
 
-    # ベクトルDB構築 (検索件数 TOP_K を指定)
     db = Chroma.from_documents(splitted_docs, embedding=embeddings)
     st.session_state.retriever = db.as_retriever(search_kwargs={"k": ct.TOP_K})
 
@@ -150,9 +149,7 @@ def file_load(path, docs_all, integrated_docs_all):
             logging.getLogger(ct.LOGGER_NAME).warning(f"File Load Error ({file_name}): {e}")
 
 def adjust_string(s):
-    """
-    文字列の正規化処理
-    """
+    """文字列の正規化処理"""
     if not isinstance(s, str):
         return s
     return unicodedata.normalize('NFC', s)

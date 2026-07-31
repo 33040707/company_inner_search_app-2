@@ -89,7 +89,7 @@ def convert_all_docs_to_text():
     # PDF, DOCX, XLSX ファイルをすべて検索
     target_files = []
     for ext in ["*.pdf", "*.docx", "*.xlsx"]:
-        target_files.extend(glob.glob(os.path.join(DATA_FOLDER, ext)))
+        target_files.extend(glob.glob(os.path.join(DATA_FOLDER, "**", ext), recursive=True))
     
     if not target_files:
         print("⚠️ dataフォルダ内に変換対象のファイルが見つかりません。")
@@ -101,8 +101,9 @@ def convert_all_docs_to_text():
         file_name = os.path.basename(file_path)
         base_name = os.path.splitext(file_name)[0]
         ext = os.path.splitext(file_name)[1].lower()
-        
-        output_txt_path = os.path.join(DATA_FOLDER, f"{base_name}.txt")
+
+        dir_name = os.path.dirname(file_path)
+        output_txt_path = os.path.join(dir_name, f"{base_name}.txt")
         
         # すでに同名のテキストファイルが存在する場合はスキップ
         if os.path.exists(output_txt_path):
